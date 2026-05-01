@@ -4,7 +4,6 @@ import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
-import { useToast } from '../components/common/Toast';
 import { formatCurrency } from '../utils/formatters';
 
 const emptyForm = { name: '', pin: '', role: 'cashier', hourlyRate: 0, profileImage: '' };
