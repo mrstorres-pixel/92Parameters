@@ -267,14 +267,16 @@ body {
 .payment-method span { display: block; font-size: 0.8rem; font-weight: 600; }
 
 /* PIN Pad */
-.pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 280px; margin: 0 auto; }
+.pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 320px; margin: 0 auto; }
 .pin-key {
-  padding: 16px; font-size: 1.25rem; font-weight: 600; border: 1px solid var(--border);
+  padding: 20px; font-size: 1.5rem; font-weight: 600; border: 1px solid var(--border);
   border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary);
   cursor: pointer; transition: var(--transition); font-family: inherit;
 }
-.pin-key:hover { background: var(--bg-card-hover); }
-.pin-key:active { transform: scale(0.95); }
+@media (min-width: 800px) {
+  .pin-pad { max-width: 400px; gap: 16px; }
+  .pin-key { padding: 28px; font-size: 2rem; }
+}
 .pin-display { text-align: center; font-size: 2rem; letter-spacing: 12px; margin-bottom: 24px; color: var(--accent); }
 
 /* Login Screen */
@@ -324,19 +326,51 @@ body {
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 .animate-fade { animation: fadeIn 0.3s ease; }
 
-/* Responsive */
+/* Responsive & Tablet Optimizations (Galaxy Tab S7 FE) */
+@media (max-width: 1280px) {
+  :root { --sidebar-w: 200px; }
+  .pos-cart-panel { width: 320px; }
+  .product-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+}
+
 @media (max-width: 1024px) {
   .sidebar { width: var(--sidebar-collapsed); }
   .sidebar .nav-label, .sidebar-logo h1 { display: none; }
-  .pos-cart-panel { width: 300px; }
-  .product-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .page-content { padding: 20px; }
 }
-@media (max-width: 768px) {
+
+@media (max-width: 800px) {
   .pos-layout { flex-direction: column; }
-  .pos-cart-panel { width: 100%; max-height: 50vh; border-left: none; border-top: 1px solid var(--border); }
+  .pos-cart-panel { 
+    width: 100%; 
+    max-height: 40vh; 
+    border-left: none; 
+    border-top: 1px solid var(--border);
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+  }
+  .pos-menu { padding-bottom: 0; }
   .stat-grid { grid-template-columns: 1fr 1fr; }
   .form-row { grid-template-columns: 1fr; }
   .page-content { padding: 16px; }
+  
+  /* Larger touch targets for portrait tablets */
+  .btn { padding: 12px 24px; }
+  .nav-item { padding: 14px 16px; }
+}
+
+/* Touch Device Refinements */
+@media (hover: none) {
+  .product-card:hover { transform: none; box-shadow: var(--shadow); }
+  .product-card:active { background: var(--bg-card-hover); transform: scale(0.98); }
+  .btn:active { opacity: 0.8; transform: scale(0.98); }
+  
+  /* Momentum Scrolling for touch */
+  .page-content, .sidebar-nav, .cart-items, .product-grid {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
 }
 
 /* Toast */
