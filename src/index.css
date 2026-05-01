@@ -511,16 +511,15 @@ body {
 /* Responsive Sidebar Drawer & Tablet Styles - MOVED TO END FOR SPECIFICITY */
 @media (max-width: 1200px) {
   .sidebar {
-    position: fixed !important; top: 0 !important; left: 0 !important; bottom: 0 !important; z-index: 2001 !important;
+    position: fixed !important; top: 0 !important; left: 0 !important; height: 100% !important; z-index: 2001 !important;
     transform: translateX(-100%); width: 280px !important;
     display: grid !important;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto 1fr;
     box-shadow: 10px 0 30px rgba(0,0,0,0.5);
-    height: 100dvh !important;
-    max-height: 100dvh !important;
     overflow: hidden !important;
   }
   .sidebar.mobile-open { transform: translateX(0) !important; }
+  .sidebar-logo { display: flex !important; justify-content: space-between !important; padding: 16px !important; }
   .sidebar-logo h1, .sidebar .nav-label { display: block !important; }
   
   .sidebar-overlay {
@@ -532,20 +531,22 @@ body {
   .menu-toggle { display: flex !important; color: #ffcc00 !important; margin-right: 15px !important; visibility: visible !important; opacity: 1 !important; }
   .header-right .btn-ghost { color: #ffffff !important; display: flex !important; visibility: visible !important; opacity: 1 !important; }
   .desktop-only { display: none !important; }
-  .sidebar-footer { position: relative !important; background: var(--bg-secondary); border-top: 1px solid var(--border); display: block !important; padding: 12px 16px !important; }
-  .sidebar-nav { overflow-y: auto !important; flex: none !important; }
+  .sidebar-footer { display: none !important; }
+  .sidebar-nav { overflow-y: auto !important; padding-bottom: 40px !important; }
   .page-content { padding: 16px; }
+  .close-drawer { display: flex !important; color: var(--text-muted) !important; }
 }
 
 .sidebar { 
   display: grid; 
   grid-template-rows: auto 1fr auto; 
-  height: 100dvh !important; 
-  max-height: 100dvh !important; 
+  height: 100%; 
   overflow: hidden !important; 
 }
 .sidebar-nav { overflow-y: auto !important; }
 .sidebar-footer { position: relative !important; border-top: 1px solid var(--border); }
+.close-drawer { display: none; }
+
 
 
 .menu-toggle { display: none; }

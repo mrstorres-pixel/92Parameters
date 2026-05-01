@@ -1,11 +1,11 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Warehouse, Leaf, Clock, DollarSign, BarChart3, Receipt, Ban, Menu, ChevronLeft, History, Users } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Warehouse, Leaf, Clock, DollarSign, BarChart3, Receipt, Ban, Menu, ChevronLeft, History, Users, X } from 'lucide-react';
 import { useUiStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { navItems } from '../../config/navigation';
 
 export default function Sidebar() {
-  const { sidebarOpen, mobileMenuOpen, toggleSidebar } = useUiStore();
+  const { sidebarOpen, mobileMenuOpen, toggleSidebar, setMobileMenuOpen } = useUiStore();
   const { currentStaff } = useAuthStore();
   const role = currentStaff?.role || 'cashier';
 
@@ -16,6 +16,9 @@ export default function Sidebar() {
       <div className="sidebar-logo">
         <div className="logo-icon">92</div>
         <h1>Parameters</h1>
+        <button className="btn btn-ghost btn-icon mobile-only close-drawer" onClick={() => setMobileMenuOpen(false)}>
+          <X size={20} />
+        </button>
       </div>
       <nav className="sidebar-nav">
         {filteredNav.map(item => (
