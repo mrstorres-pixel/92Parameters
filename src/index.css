@@ -540,7 +540,9 @@ body {
 .sidebar { 
   display: grid; 
   grid-template-rows: auto 1fr auto; 
-  height: 100%; 
+  height: calc(100vh - 20px) !important; /* Safety margin for Android bars */
+  margin-top: 10px;
+  margin-bottom: 10px;
   overflow: hidden !important; 
 }
 .sidebar-nav { overflow-y: auto !important; }

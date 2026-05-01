@@ -23,49 +23,70 @@ export default function ReceiptModal({ transaction, onClose }) {
         <button className="btn btn-primary" onClick={handlePrint}>Print Receipt</button>
       </>
     }>
-      <div ref={ref} className="receipt">
-        <div className="receipt-header">
-          <h3>92Parameters</h3>
-          <div>Coffee Shop</div>
-          <div style={{ marginTop: 8, fontSize: '0.75rem' }}>{formatDateTime(t.datetime)}</div>
-          <div style={{ fontWeight: 700 }}>{t.receiptNo}</div>
-          <div>{t.orderType}</div>
+      <div ref={ref} className="receipt" style={{ color: '#000', backgroundColor: '#fff', padding: '16px', fontFamily: '"Courier New", Courier, monospace', fontSize: '13px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+          <img src="/logo.png" alt="92Parameters" style={{ width: '80px', height: 'auto', marginBottom: '8px' }} />
+          <div style={{ fontWeight: 'bold', fontSize: '14px' }}>92 PARAMETERS CAFE</div>
         </div>
 
+        <div style={{ textAlign: 'center', fontSize: '10px', marginBottom: '10px', lineHeight: '1.2' }}>
+          THIS IS NOT AN OFFICIAL RECEIPT.<br />
+          PLEASE ASK FOR BIR SERVICE INVOICE
+        </div>
+
+        <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+          THIS IS NOT AN OFFICIAL RECEIPT
+        </div>
+
+        <div style={{ marginBottom: '10px' }}>
+          Receipt No. : {t.receiptNo}
+        </div>
+
+        <div className="receipt-divider" style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
+
         {(t.items || []).map((item, i) => (
-          <div key={i}>
-            <div className="receipt-line">
-              <span>{item.name} x{item.quantity}</span>
+          <div key={i} style={{ marginBottom: '4px' }}>
+            <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>{item.quantity} x {item.name}</span>
               <span>{formatCurrency(calcItemTotal(item))}</span>
             </div>
-            {item.discount > 0 && (
-              <div style={{ fontSize: '0.7rem', color: '#666', paddingLeft: 8 }}>
-                Discount: {item.discount}% (was {formatCurrency(item.price)} ea)
-              </div>
-            )}
           </div>
         ))}
 
-        <div className="receipt-divider" />
-        <div className="receipt-line receipt-total">
-          <span>TOTAL</span>
-          <span>{formatCurrency(t.total)}</span>
+        <div className="receipt-divider" style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
+
+        <div style={{ textAlign: 'right', marginBottom: '15px' }}>
+          <div className="receipt-line" style={{ display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>
+            <span style={{ fontWeight: 'bold' }}>Total:</span>
+            <span style={{ fontWeight: 'bold' }}>{formatCurrency(t.total)}</span>
+          </div>
+          {t.cashReceived && (
+            <>
+              <div className="receipt-line" style={{ display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>
+                <span>Cash Received:</span>
+                <span>{formatCurrency(t.cashReceived)}</span>
+              </div>
+              <div className="receipt-line" style={{ display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>
+                <span style={{ fontWeight: 'bold' }}>Change:</span>
+                <span style={{ fontWeight: 'bold' }}>{formatCurrency(t.cashReceived - t.total)}</span>
+              </div>
+            </>
+          )}
         </div>
-        <div className="receipt-line">
-          <span>Payment</span>
-          <span>{t.paymentMethod}</span>
+
+        <div style={{ marginBottom: '10px' }}>
+          Payment Method: {t.paymentMethod}<br />
+          {t.orderType}
         </div>
-        {t.cashReceived && (
-          <>
-            <div className="receipt-line"><span>Cash</span><span>{formatCurrency(t.cashReceived)}</span></div>
-            <div className="receipt-line"><span>Change</span><span>{formatCurrency(t.cashReceived - t.total)}</span></div>
-          </>
-        )}
-        <div className="receipt-divider" />
-        <div className="receipt-footer">
-          <div>Served by: {t.staffName || 'Staff'}</div>
-          <div style={{ marginTop: 8 }}>Thank you for visiting!</div>
-          <div>☕ 92Parameters ☕</div>
+
+        <div style={{ marginBottom: '15px' }}>
+          Staff: {t.staffName || 'Staff'}
+        </div>
+
+        <div style={{ textAlign: 'center', fontSize: '11px' }}>
+          <div style={{ marginBottom: '4px' }}>--- Powered by 92Parameters ---</div>
+          <div>{formatDateTime(t.datetime)}</div>
+          <div style={{ marginTop: '10px', fontWeight: 'bold' }}>THANK YOU! SEE US AGAIN! :)</div>
         </div>
       </div>
     </Modal>
