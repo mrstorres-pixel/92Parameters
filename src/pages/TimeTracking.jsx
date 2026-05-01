@@ -3,7 +3,7 @@ import { Camera, Clock } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useToast } from '../components/common/Toast';
-import { formatDate, formatTime } from '../utils/formatters';
+import { formatDate, formatTime, formatCurrency } from '../utils/formatters';
 
 export default function TimeTracking() {
   const [staff, setStaff] = useState([]);
@@ -54,12 +54,18 @@ export default function TimeTracking() {
     const today = new Date().toISOString().slice(0,10);
 
     if (capturing.type === 'in') {
-      await db.timeRecords.add({ staffId: capturing.staffId, date: today, timeIn: now, photoIn: photo, timeOut: null, photoOut: null });
+      await db.timeRecords.add({ staffId: capturing.staffId, date: today, timeIn: now, photoIn: photo, timeOut: null, photoOut: null, salaryEarned: 0 });
       toast('Time In recorded!');
     } else {
       const rec = records.find(r => r.staffId === capturing.staffId && !r.timeOut);
       if (rec) {
-        await db.timeRecords.update(rec.id, { timeOut: now, photoOut: photo });
+        const s = staff.find(x => x.id === capturing.staffId);
+        const hourlyRate = s?.hourlyRate || 0;
+        const diff = now - rec.timeIn;
+        const hoursWorked = diff / 3600000; // milliseconds to hours
+        const salaryEarned = hoursWorked * hourlyRate;
+
+        await db.timeRecords.update(rec.id, { timeOut: now, photoOut: photo, salaryEarned });
         toast('Time Out recorded!');
       } else { toast('No active time-in found', 'error'); }
     }
@@ -88,7 +94,11 @@ export default function TimeTracking() {
               const active = hasActiveTimeIn(s.id);
               return (
                 <div key={s.id} className="staff-card">
-                  <div className="staff-avatar">{s.name.charAt(0)}</div>
+                  {s.profileImage ? (
+                    <img src={s.profileImage} alt="profile" style={{ width: 48, height: 48, borderRadius: 24, objectFit: 'cover', margin: '0 auto 8px' }} />
+                  ) : (
+                    <div className="staff-avatar">{s.name.charAt(0)}</div>
+                  )}
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{s.name}</div>
                   <span className={`badge ${active ? 'badge-success' : 'badge-neutral'}`}>{active ? 'Clocked In' : 'Clocked Out'}</span>
                   <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
@@ -107,7 +117,7 @@ export default function TimeTracking() {
           <h3 style={{ fontSize: '1rem', marginBottom: 16, color: 'var(--text-secondary)' }}>Records for {filterDate}</h3>
           <div className="table-container">
             <table className="data-table">
-              <thead><tr><th>Staff</th><th>Time In</th><th>Photo In</th><th>Time Out</th><th>Photo Out</th><th>Duration</th></tr></thead>
+              <thead><tr><th>Staff</th><th>Time In</th><th>Photo In</th><th>Time Out</th><th>Photo Out</th><th>Duration</th><th>Earned</th></tr></thead>
               <tbody>
                 {records.map(r => (
                   <tr key={r.id}>
@@ -117,6 +127,7 @@ export default function TimeTracking() {
                     <td>{r.timeOut ? formatTime(r.timeOut) : <span className="badge badge-success">Active</span>}</td>
                     <td>{r.photoOut ? <img src={r.photoOut} alt="out" onClick={() => setViewPhoto(r.photoOut)} style={{ width: 48, height: 36, borderRadius: 4, objectFit: 'cover', cursor: 'pointer' }} /> : '—'}</td>
                     <td style={{ fontWeight: 600 }}>{getDuration(r.timeIn, r.timeOut)}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--success)' }}>{r.timeOut ? formatCurrency(r.salaryEarned || 0) : '—'}</td>
                   </tr>
                 ))}
               </tbody>

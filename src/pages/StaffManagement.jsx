@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, Users } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Edit2, Trash2, Search, Users, Camera } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
+import { useToast } from '../components/common/Toast';
+import { formatCurrency } from '../utils/formatters';
 
-const emptyForm = { name: '', pin: '', role: 'cashier' };
+const emptyForm = { name: '', pin: '', role: 'cashier', hourlyRate: 0, profileImage: '' };
 
 export default function StaffManagement() {
   const [staff, setStaff] = useState([]);
@@ -13,7 +15,11 @@ export default function StaffManagement() {
   const [editing, setEditing] = useState(null); // 'new' or staff ID
   const [form, setForm] = useState(emptyForm);
   const [showPin, setShowPin] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [stream, setStream] = useState(null);
   
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const { currentStaff } = useAuthStore();
   const toast = useToast();
 
@@ -56,9 +62,16 @@ export default function StaffManagement() {
     if (existing && existing.id !== editing) {
       toast('This PIN is already in use by another staff member', 'error');
       return;
+      return;
     }
 
-    const data = { name: form.name, pin: form.pin, role: form.role };
+    const data = { 
+      name: form.name, 
+      pin: form.pin, 
+      role: form.role,
+      hourlyRate: Number(form.hourlyRate || 0),
+      profileImage: form.profileImage
+    };
 
     if (editing === 'new') {
       await db.staff.add(data);
@@ -91,6 +104,30 @@ export default function StaffManagement() {
     load();
   }
 
+  async function startCapture() {
+    setCapturing(true);
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 } });
+      setStream(s);
+      setTimeout(() => { if (videoRef.current) videoRef.current.srcObject = s; }, 100);
+    } catch { toast('Camera access denied', 'error'); setCapturing(false); }
+  }
+
+  function stopCapture() {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    setStream(null); setCapturing(false);
+  }
+
+  function takePhoto() {
+    if (!videoRef.current || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    canvas.width = 320; canvas.height = 240;
+    canvas.getContext('2d').drawImage(videoRef.current, 0, 0, 320, 240);
+    const photo = canvas.toDataURL('image/jpeg', 0.7);
+    setForm({ ...form, profileImage: photo });
+    stopCapture();
+  }
+
   const filtered = staff.filter(s => s.name.toLowerCase().includes(search.toLowerCase()) || s.role.toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -113,6 +150,7 @@ export default function StaffManagement() {
             <tr>
               <th>Name</th>
               <th>Role</th>
+              <th>Hourly Rate</th>
               <th>PIN</th>
               <th>Actions</th>
             </tr>
@@ -122,7 +160,11 @@ export default function StaffManagement() {
               <tr key={s.id}>
                 <td style={{ fontWeight: 500 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div className="staff-avatar" style={{ width: 32, height: 32, fontSize: '0.9rem' }}>{s.name.charAt(0)}</div>
+                    {s.profileImage ? (
+                      <img src={s.profileImage} alt="profile" style={{ width: 32, height: 32, borderRadius: 16, objectFit: 'cover' }} />
+                    ) : (
+                      <div className="staff-avatar" style={{ width: 32, height: 32, fontSize: '0.9rem' }}>{s.name.charAt(0)}</div>
+                    )}
                     {s.name}
                     {s.id === currentStaff.id && <span className="badge badge-neutral" style={{ marginLeft: 8 }}>You</span>}
                   </div>
@@ -132,6 +174,7 @@ export default function StaffManagement() {
                     {s.role}
                   </span>
                 </td>
+                <td style={{ fontWeight: 500 }}>{formatCurrency(s.hourlyRate || 0)}/hr</td>
                 <td style={{ fontFamily: 'monospace', letterSpacing: 2 }}>****</td>
                 <td>
                   <div className="flex gap-8">
@@ -161,6 +204,14 @@ export default function StaffManagement() {
             <button className="btn btn-primary" onClick={save}>Save</button>
           </>
         }>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center' }}>
+            <div style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'var(--bg-secondary)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {form.profileImage ? <img src={form.profileImage} alt="profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Users size={32} color="var(--text-muted)" />}
+            </div>
+            <button className="btn btn-secondary" onClick={startCapture}><Camera size={16} /> Take Photo</button>
+            {form.profileImage && <button className="btn btn-ghost" onClick={() => setForm({...form, profileImage: ''})}>Remove</button>}
+          </div>
+
           <div className="form-group">
             <label className="form-label">Full Name</label>
             <input 
@@ -212,11 +263,34 @@ export default function StaffManagement() {
             </div>
           </div>
           
+          <div className="form-group">
+            <label className="form-label">Hourly Rate (₱)</label>
+            <input 
+              className="form-input" 
+              type="number"
+              placeholder="e.g. 150"
+              value={form.hourlyRate} 
+              onChange={e => setForm({...form, hourlyRate: e.target.value})} 
+            />
+          </div>
+          
           {editing === currentStaff.id && (
             <p className="text-sm text-muted" style={{ marginTop: 16 }}>
               Note: You are editing your own account. If you change your PIN, make sure to remember it for your next login!
             </p>
           )}
+        </Modal>
+      )}
+
+      {capturing && (
+        <Modal title="Capture Profile Photo" onClose={stopCapture} footer={
+          <><button className="btn btn-secondary" onClick={stopCapture}>Cancel</button><button className="btn btn-primary" onClick={takePhoto}><Camera size={16} /> Capture</button></>
+        }>
+          <div className="webcam-container">
+            <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', borderRadius: 'var(--radius)' }} />
+          </div>
+          <canvas ref={canvasRef} style={{ display: 'none' }} />
+          <p className="text-center text-muted text-sm">Position face in the camera and click Capture</p>
         </Modal>
       )}
     </div>
