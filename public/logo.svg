@@ -1,5 +1,0 @@
-<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M105 125L75 165M105 125L135 125M105 125V120M95 120C95 106.193 106.193 95 120 95C133.807 95 145 106.193 145 120V125M65 80C65 57.9086 82.9086 40 105 40C127.091 40 145 57.9086 145 80V125M65 80C65 102.091 82.9086 120 105 120H135" stroke="black" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="165" cy="85" r="10" stroke="black" stroke-width="8"/>
-  <text x="100" y="160" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="24" fill="black">parameters</text>
-</svg>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Banknote, Smartphone, CreditCard } from 'lucide-react';
+import { Banknote, Smartphone, CreditCard, Landmark } from 'lucide-react';
 import Modal from '../common/Modal';
 import { formatCurrency } from '../../utils/formatters';
 import { calcChange } from '../../utils/calculations';
@@ -8,6 +8,7 @@ const methods = [
   { id: 'Cash', icon: Banknote, label: 'Cash' },
   { id: 'GCash', icon: Smartphone, label: 'GCash' },
   { id: 'Card', icon: CreditCard, label: 'Card' },
+  { id: 'Bank Transfer', icon: Landmark, label: 'Bank Transfer' },
 ];
 
 export default function PaymentModal({ total, onConfirm, onClose }) {

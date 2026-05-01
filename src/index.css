@@ -280,7 +280,7 @@ body {
 .charge-btn { width: 100%; padding: 12px; font-size: 1rem; }
 
 /* Payment Modal */
-.payment-methods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+.payment-methods { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-bottom: 20px; }
 .payment-method {
   padding: 16px; border: 2px solid var(--border); border-radius: var(--radius); text-align: center;
   cursor: pointer; transition: var(--transition); background: var(--bg-card);
@@ -528,6 +528,7 @@ body {
   }
   .sidebar-overlay.active { display: block; }
   
+  .payment-methods { grid-template-columns: repeat(2, 1fr) !important; }
   .menu-toggle { display: flex !important; color: #ffcc00 !important; margin-right: 15px !important; visibility: visible !important; opacity: 1 !important; }
   .header-right .btn-ghost { color: #ffffff !important; display: flex !important; visibility: visible !important; opacity: 1 !important; }
   .desktop-only { display: none !important; }
