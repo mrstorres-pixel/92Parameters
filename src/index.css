@@ -75,29 +75,34 @@ body {
 .sidebar.collapsed .nav-label { display: none; }
 .sidebar-footer { padding: 12px 8px; border-top: 1px solid var(--border); }
 
-/* Responsive Sidebar Drawer */
+/* Responsive Sidebar Drawer & Tablet Styles */
 @media (max-width: 1200px) {
   .sidebar {
     position: fixed !important; top: 0 !important; left: 0 !important; bottom: 0 !important; z-index: 2001 !important;
     transform: translateX(-100%); width: 280px !important;
     display: flex !important;
     box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+    height: 100dvh !important;
   }
-  .sidebar.mobile-open { transform: translateX(0); }
+  .sidebar.mobile-open { transform: translateX(0) !important; }
   .sidebar-logo h1, .sidebar .nav-label { display: block !important; }
-  .sidebar-logo { border-bottom: none; }
   
   .sidebar-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
     z-index: 2000; display: none; animation: fadeIn 0.2s ease;
   }
   .sidebar-overlay.active { display: block; }
+  
+  .menu-toggle { display: flex !important; color: #ffcc00 !important; margin-right: 15px !important; visibility: visible !important; opacity: 1 !important; }
+  .header-right .btn-ghost { color: #ffffff !important; display: flex !important; visibility: visible !important; opacity: 1 !important; }
   .desktop-only { display: none !important; }
+  .sidebar-footer { position: absolute; bottom: 0; left: 0; right: 0; background: var(--bg-secondary); display: block !important; }
+  .page-content { padding: 16px; }
 }
 
-.menu-toggle { display: flex !important; color: #ffcc00 !important; margin-right: 15px; cursor: pointer; z-index: 10; }
-.header-right .btn-ghost { color: #ffffff !important; opacity: 1 !important; visibility: visible !important; display: flex !important; }
-.sidebar-footer { position: absolute; bottom: 0; left: 0; right: 0; background: var(--bg-secondary); }
+.menu-toggle { display: none; }
+.desktop-only { display: block; }
+
 
 
 /* Header */
@@ -314,13 +319,14 @@ body {
 /* PIN Pad */
 .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 320px; margin: 0 auto; }
 .pin-key {
-  padding: 20px; font-size: 1.5rem; font-weight: 600; border: 1px solid var(--border);
+  height: 70px; font-size: 1.5rem; font-weight: 600; border: 1px solid var(--border);
   border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary);
   cursor: pointer; transition: var(--transition); font-family: inherit;
+  display: flex; align-items: center; justify-content: center; line-height: 1;
 }
-@media (min-width: 800px) {
+@media (min-width: 1201px) {
   .pin-pad { max-width: 400px; gap: 16px; }
-  .pin-key { padding: 28px; font-size: 2rem; }
+  .pin-key { height: 90px; font-size: 2rem; }
 }
 .pin-display { text-align: center; font-size: 2rem; letter-spacing: 12px; margin-bottom: 24px; color: var(--accent); }
 
@@ -410,23 +416,8 @@ body {
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 .animate-fade { animation: fadeIn 0.3s ease; }
 
-/* Responsive & Tablet Optimizations (Galaxy Tab S7 FE) */
-@media (max-width: 1280px) {
-  :root { --sidebar-w: 200px; }
-  .pos-layout { height: calc(100dvh - var(--header-h) - 48px); }
-  .pos-cart-panel { width: 340px; }
-  .product-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
-}
-
-@media (max-width: 1024px) {
-  .sidebar { width: var(--sidebar-collapsed); }
-  .sidebar .nav-label, .sidebar-logo h1 { display: none; }
-  .page-content { padding: 20px; }
-  .pos-layout { height: calc(100dvh - var(--header-h) - 40px); margin: -20px; }
-}
-
+/* Remove old redundant media queries */
 @media (max-width: 800px) {
-  .page-content { padding: 16px; }
   .pos-layout { 
     flex-direction: column; 
     height: calc(100dvh - var(--header-h) - 32px); 
@@ -440,12 +431,6 @@ body {
     border-top: 2px solid var(--border);
   }
   .pos-menu { height: 55%; padding: 12px; }
-  .stat-grid { grid-template-columns: 1fr 1fr; }
-  .form-row { grid-template-columns: 1fr; }
-  
-  /* Larger touch targets for portrait tablets */
-  .btn { padding: 12px 24px; }
-  .nav-item { padding: 14px 16px; }
 }
 
 /* Touch Device Refinements */
