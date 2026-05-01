@@ -5,14 +5,14 @@ import { useAuthStore } from '../../stores/authStore';
 import { navItems } from '../../config/navigation';
 
 export default function Sidebar() {
-  const { sidebarOpen, toggleSidebar } = useUiStore();
+  const { sidebarOpen, mobileMenuOpen, toggleSidebar } = useUiStore();
   const { currentStaff } = useAuthStore();
   const role = currentStaff?.role || 'cashier';
 
   const filteredNav = navItems.filter(item => item.roles.includes(role));
 
   return (
-    <aside className={`sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
+    <aside className={`sidebar ${sidebarOpen ? '' : 'collapsed'} ${mobileMenuOpen ? 'mobile-open' : ''}`}>
       <div className="sidebar-logo">
         <div className="logo-icon">92</div>
         <h1>Parameters</h1>

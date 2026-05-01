@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Bell } from 'lucide-react';
+import { LogOut, Bell, Menu } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import { useUiStore } from '../../stores/uiStore';
 import { useLocation } from 'react-router-dom';
 
 const pageTitles = {
@@ -12,6 +13,7 @@ const pageTitles = {
 
 export default function Header() {
   const { currentStaff, logout } = useAuthStore();
+  const { toggleMobileMenu } = useUiStore();
   const location = useLocation();
   const [time, setTime] = useState(new Date());
 
@@ -25,6 +27,9 @@ export default function Header() {
   return (
     <header className="header">
       <div className="header-left">
+        <button className="btn btn-ghost btn-icon menu-toggle" onClick={toggleMobileMenu}>
+          <Menu size={20} />
+        </button>
         <h2>{title}</h2>
       </div>
       <div className="header-right">

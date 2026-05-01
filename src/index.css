@@ -73,6 +73,29 @@ body {
 .sidebar.collapsed .nav-label { display: none; }
 .sidebar-footer { padding: 12px 8px; border-top: 1px solid var(--border); }
 
+/* Responsive Sidebar Drawer */
+@media (max-width: 1024px) {
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 1001;
+    transform: translateX(-100%); width: var(--sidebar-w) !important;
+  }
+  .sidebar.mobile-open { transform: translateX(0); }
+  .sidebar-logo h1, .sidebar .nav-label { display: block !important; }
+  .sidebar-footer { display: none; }
+  .sidebar-logo { border-bottom: none; }
+  
+  .sidebar-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    z-index: 1000; display: none; animation: fadeIn 0.2s ease;
+  }
+  .sidebar-overlay.active { display: block; }
+}
+
+.menu-toggle { display: none; margin-right: 12px; }
+@media (max-width: 1024px) {
+  .menu-toggle { display: flex; }
+}
+
 /* Header */
 .header {
   height: var(--header-h); background: var(--bg-secondary); border-bottom: 1px solid var(--border);
@@ -432,6 +455,50 @@ body {
 /* Void Badge */
 .void-stamp { color: var(--danger); font-weight: 700; font-size: 0.75rem; text-transform: uppercase; border: 2px solid var(--danger); padding: 2px 8px; border-radius: 4px; display: inline-block; transform: rotate(-5deg); }
 
+/* Responsive Tables & Grids Overhaul */
+@media (max-width: 1024px) {
+  .stat-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .page-header h2 { font-size: 1.25rem; }
+  .toolbar { gap: 8px; }
+  .search-bar { max-width: 100%; width: 100%; order: 2; }
+  .toolbar .btn { order: 1; }
+  
+  /* Make tables horizontally scrollable with a scroll indicator */
+  .table-container { 
+    position: relative; 
+    border: none;
+    background: var(--bg-secondary);
+    border-radius: var(--radius);
+  }
+  .data-table { min-width: 600px; }
+}
+
+@media (max-width: 640px) {
+  .stat-grid { grid-template-columns: 1fr; }
+  .header-clock { display: none; }
+  .header-staff .role-badge { display: none; }
+  
+  /* Modal optimization */
+  .modal { max-height: 100dvh; border-radius: 0; }
+  .modal-overlay { padding: 0; }
+}
+
+/* Touch-specific refinements for the Mobile/Tablet Site ONLY */
+@media (pointer: coarse) {
+  .btn, .nav-item, .pin-key, .tab {
+    min-height: 44px;
+  }
+  .form-input, .form-select {
+    font-size: 16px; /* Prevents iOS auto-zoom on focus */
+    padding: 12px 16px;
+  }
+}
+
+/* Scrollbar refinement for touch */
+@media (max-width: 1024px) {
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+}
+
 /* Utility */
 .flex { display: flex; }
 .flex-between { display: flex; align-items: center; justify-content: space-between; }
@@ -450,3 +517,5 @@ body {
 .fw-600 { font-weight: 600; }
 .w-full { width: 100%; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.items-center { align-items: center; }
+
