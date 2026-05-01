@@ -1,13 +1,6 @@
 import React from 'react';
 import { formatCurrency } from '../../utils/formatters';
 
-const EMOJIS = {
-  'Espresso': '☕', 'Americano': '☕', 'Café Latte': '🥛', 'Cappuccino': '☕',
-  'Caramel Macchiato': '🍮', 'Mocha': '🍫', 'Matcha Latte': '🍵', 'Iced Tea': '🧊',
-  'Hot Chocolate': '🍫', 'Croissant': '🥐', 'Blueberry Muffin': '🧁', 'Chocolate Cake Slice': '🍰',
-  'Cheesecake Slice': '🍰', 'Ham & Cheese Sandwich': '🥪', 'Chicken Pesto Panini': '🥪', 'Caesar Salad': '🥗',
-};
-
 export default function ProductGrid({ products, category, searchQuery, onAdd }) {
   const filtered = products.filter(p => {
     if (category && category !== 'All' && p.category !== category) return false;
@@ -19,7 +12,7 @@ export default function ProductGrid({ products, category, searchQuery, onAdd }) 
     <div className="product-grid">
       {filtered.map(p => (
         <div key={p.id} className={`product-card ${!p.isAvailable ? 'unavailable' : ''}`} onClick={() => p.isAvailable && onAdd(p)}>
-          <div className="product-emoji">{EMOJIS[p.name] || '☕'}</div>
+          <div className="product-emoji">{p.emoji || '☕'}</div>
           <div className="product-name">{p.name}</div>
           <div className="product-price">{formatCurrency(p.price)}</div>
           {!p.isAvailable && <span className="badge badge-danger" style={{ position: 'absolute', top: 8, right: 8 }}>Off</span>}

@@ -7,7 +7,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
 import { formatCurrency } from '../utils/formatters';
 
-const empty = { name: '', category: 'Drinks', price: '', cost: '', isAvailable: true };
+const empty = { name: '', category: 'Drinks', price: '', cost: '', isAvailable: true, emoji: '☕' };
 
 export default function ProductManagement() {
   const [products, setProducts] = useState([]);
@@ -57,7 +57,10 @@ export default function ProductManagement() {
           <tbody>
             {filtered.map(p => (
               <tr key={p.id}>
-                <td style={{ fontWeight: 500 }}>{p.name}</td>
+                <td style={{ fontWeight: 500 }}>
+                  <span style={{ marginRight: 8, fontSize: '1.2rem' }}>{p.emoji || '☕'}</span>
+                  {p.name}
+                </td>
                 <td><span className="badge badge-info">{p.category}</span></td>
                 <td>{formatCurrency(p.price)}</td>
                 <td>{formatCurrency(p.cost)}</td>
@@ -79,7 +82,23 @@ export default function ProductManagement() {
         <Modal title={editing === 'new' ? 'Add Product' : 'Edit Product'} onClose={() => setEditing(null)} footer={
           <><button className="btn btn-secondary" onClick={() => setEditing(null)}>Cancel</button><button className="btn btn-primary" onClick={save}>Save</button></>
         }>
-          <div className="form-group"><label className="form-label">Name</label><input className="form-input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Name</label><input className="form-input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+            <div className="form-group">
+              <label className="form-label">Emoji (1 max)</label>
+              <input 
+                className="form-input" 
+                value={form.emoji} 
+                onChange={e => {
+                  const val = e.target.value;
+                  if (Array.from(val).length <= 1) {
+                    setForm({...form, emoji: val});
+                  }
+                }} 
+                placeholder="☕" 
+              />
+            </div>
+          </div>
           <div className="form-group"><label className="form-label">Category</label>
             <select className="form-select" value={form.category} onChange={e => setForm({...form, category: e.target.value})}><option>Drinks</option><option>Food</option></select>
           </div>
