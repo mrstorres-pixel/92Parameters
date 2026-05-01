@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Warehouse, Leaf, Clock, DollarSign, BarChart3, Receipt, Ban, Menu, ChevronLeft, History } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Warehouse, Leaf, Clock, DollarSign, BarChart3, Receipt, Ban, Menu, ChevronLeft, History, Users } from 'lucide-react';
 import { useUiStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -14,6 +14,7 @@ const navItems = [
   { to: '/reports', icon: BarChart3, label: 'Reports', ownerOnly: true },
   { to: '/transactions', icon: Receipt, label: 'Transactions' },
   { to: '/voids', icon: Ban, label: 'Void Log' },
+  { to: '/staff', icon: Users, label: 'Staff Management', ownerOnly: true },
   { to: '/audit', icon: History, label: 'Audit Log', ownerOnly: true },
 ];
 
