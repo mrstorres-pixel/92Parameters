@@ -25,7 +25,7 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <div className="sidebar-footer desktop-only">
+      <div className="sidebar-footer">
         <button className="btn btn-ghost btn-icon" onClick={toggleSidebar} title={sidebarOpen ? 'Collapse' : 'Expand'}>
           {sidebarOpen ? <ChevronLeft size={18} /> : <Menu size={18} />}
         </button>
