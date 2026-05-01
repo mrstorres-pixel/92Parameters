@@ -25,7 +25,7 @@ export default function ReceiptModal({ transaction, onClose }) {
     }>
       <div ref={ref} className="receipt" style={{ color: '#000', backgroundColor: '#fff', padding: '16px', fontFamily: '"Courier New", Courier, monospace', fontSize: '13px' }}>
         <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-          <img src="/logo.png" alt="92Parameters" style={{ width: '80px', height: 'auto', marginBottom: '8px' }} />
+          <img src="/logo.png?v=2" alt="92Parameters" style={{ width: '80px', height: 'auto', marginBottom: '8px' }} />
           <div style={{ fontWeight: 'bold', fontSize: '14px' }}>92 PARAMETERS CAFE</div>
         </div>
 

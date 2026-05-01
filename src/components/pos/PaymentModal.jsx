@@ -1,3 +1,4 @@
+/* Version 2.1 - Forced Refresh */
 import React, { useState } from 'react';
 import { Banknote, Smartphone, CreditCard, Landmark } from 'lucide-react';
 import Modal from '../common/Modal';
