@@ -76,12 +76,13 @@ body {
 .sidebar-footer { padding: 12px 8px; border-top: 1px solid var(--border); }
 
 /* Responsive Sidebar Drawer */
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .sidebar {
     position: fixed !important; top: 0 !important; left: 0 !important; bottom: 0 !important; z-index: 2001 !important;
     transform: translateX(-100%); width: 280px !important;
     display: flex !important;
     box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+    height: 100dvh !important;
   }
   .sidebar.mobile-open { transform: translateX(0); }
   .sidebar-logo h1, .sidebar .nav-label { display: block !important; }
@@ -93,13 +94,14 @@ body {
   }
   .sidebar-overlay.active { display: block; }
   
-  .mobile-only { display: flex !important; }
+  .menu-toggle { display: flex !important; }
   .desktop-only { display: none !important; }
 }
 
-.mobile-only { display: none !important; }
-.menu-toggle { color: #ffffff !important; margin-right: 12px; }
-.header-right .btn-ghost { color: #ffffff !important; opacity: 1 !important; }
+.menu-toggle { display: none; color: #ffffff !important; margin-right: 12px; }
+.header-right .btn-ghost { color: #ffffff !important; opacity: 1 !important; visibility: visible !important; }
+.mobile-only { display: none; } /* Deprecated */
+
 
 /* Header */
 .header {
@@ -331,36 +333,39 @@ body {
   display: flex; 
   flex-direction: column; 
   align-items: center; 
-  justify-content: flex-start; /* Start from top to allow scrolling */
+  justify-content: flex-start;
   background: radial-gradient(circle at center, #1a1611 0%, var(--bg-primary) 100%);
-  padding: 40px 20px;
+  padding: 20px;
   overflow-y: auto;
 }
 .login-card { 
   background: var(--bg-card); 
   border: 1px solid var(--border); 
   border-radius: var(--radius-lg); 
-  padding: 40px; 
+  padding: 30px; 
   width: 100%; 
-  max-width: 420px; 
+  max-width: 400px; 
   text-align: center; 
   box-shadow: var(--shadow-lg); 
-  margin: auto 0; /* Center vertically if space allows */
+  margin-top: auto;
+  margin-bottom: auto;
 }
 
 @media (min-width: 800px) {
-  .login-card { max-width: 500px; padding: 24px 48px; }
-  .login-card h1 { font-size: 2.2rem; margin-bottom: 4px; }
-  .login-card p { font-size: 0.9rem; margin-bottom: 16px; }
-  .pin-display { font-size: 1.75rem; margin-bottom: 20px; }
-  .login-logo { width: 50px !important; height: 50px !important; font-size: 1.1rem !important; }
+  .login-card { max-width: 460px; padding: 20px 40px; }
+  .login-card h1 { font-size: 2rem; margin-bottom: 2px; }
+  .login-card p { font-size: 0.85rem; margin-bottom: 12px; }
+  .pin-display { font-size: 1.5rem; margin-bottom: 16px; }
+  .login-logo { width: 40px !important; height: 40px !important; font-size: 1rem !important; margin-bottom: 8px !important; }
 }
 
-@media (max-height: 700px) and (orientation: landscape) {
-  .login-screen { padding: 20px; }
-  .login-card { padding: 20px 40px; }
+@media (max-height: 700px) {
+  .login-screen { padding: 10px; }
+  .login-card { padding: 15px 30px; margin-top: 10px; }
   .login-logo { display: none; }
-  .login-card h1 { font-size: 1.75rem; }
+  .login-card h1 { font-size: 1.5rem; }
+  .pin-display { margin-bottom: 10px; }
+  .pin-key { height: 50px; }
 }
 
 .login-logo { 
@@ -479,7 +484,7 @@ body {
   .page-header h2 { font-size: 1.25rem; }
   .toolbar { gap: 8px; }
   .search-bar { max-width: 100%; width: 100%; order: 2; }
-  .toolbar .btn { order: 1; }
+  .toolbar .menu-toggle { display: block; order: 1; }
   
   /* Make tables horizontally scrollable with a scroll indicator */
   .table-container { 
