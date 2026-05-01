@@ -282,11 +282,34 @@ body {
 /* Login Screen */
 .login-screen {
   height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1207 100%);
+  background: radial-gradient(circle at center, #1a1611 0%, var(--bg-primary) 100%);
+  padding: 20px;
 }
-.login-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 40px; width: 100%; max-width: 400px; text-align: center; box-shadow: var(--shadow-lg); }
-.login-card h1 { font-family: 'Playfair Display', serif; font-size: 2rem; color: var(--accent); margin-bottom: 8px; }
-.login-card p { color: var(--text-secondary); margin-bottom: 32px; }
+.login-card { 
+  background: var(--bg-card); 
+  border: 1px solid var(--border); 
+  border-radius: var(--radius-lg); 
+  padding: 40px; 
+  width: 100%; 
+  max-width: 420px; 
+  text-align: center; 
+  box-shadow: var(--shadow-lg); 
+}
+
+@media (min-width: 800px) {
+  .login-card { max-width: 540px; padding: 60px; }
+  .login-card h1 { font-size: 3.5rem; margin-bottom: 12px; }
+  .login-card p { font-size: 1.1rem; margin-bottom: 40px; }
+  .pin-display { font-size: 3rem; margin-bottom: 40px; }
+  .login-logo { width: 80px !important; height: 80px !important; font-size: 1.5rem !important; }
+}
+
+.login-logo { 
+  width: 56px; height: 56px; font-size: 1.1rem; margin: 0 auto 12px; 
+  background: var(--accent); border-radius: var(--radius-sm); 
+  display: flex; align-items: center; justify-content: center; 
+  color: var(--bg-primary); font-weight: 800; 
+}
 
 /* Time Tracking */
 .time-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }

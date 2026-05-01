@@ -1,9 +1,10 @@
 import React from 'react';
 import { formatCurrency } from '../../utils/formatters';
 
-export default function ProductGrid({ products, category, searchQuery, onAdd }) {
+export default function ProductGrid({ products, category, subCategory, searchQuery, onAdd }) {
   const filtered = products.filter(p => {
     if (category && category !== 'All' && p.category !== category) return false;
+    if (subCategory && subCategory !== 'All' && p.subCategory !== subCategory) return false;
     if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });

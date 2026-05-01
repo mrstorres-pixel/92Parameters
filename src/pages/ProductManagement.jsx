@@ -6,8 +6,9 @@ import RecipeModal from '../components/products/RecipeModal';
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
 import { formatCurrency } from '../utils/formatters';
+import { CATEGORIES, SORT_OPTIONS } from '../config/categories';
 
-const empty = { name: '', category: 'Drinks', price: '', cost: '', isAvailable: true, emoji: '☕' };
+const empty = { name: '', category: 'Drinks', subCategory: '', price: '', cost: '', isAvailable: true, emoji: '☕' };
 
 export default function ProductManagement() {
   const [products, setProducts] = useState([]);
@@ -15,6 +16,7 @@ export default function ProductManagement() {
   const [editing, setEditing] = useState(null);
   const [recipeProduct, setRecipeProduct] = useState(null);
   const [form, setForm] = useState(empty);
+  const [sortBy, setSortBy] = useState('name-asc');
   const { currentStaff } = useAuthStore();
   const isOwner = currentStaff?.role === 'owner';
   const toast = useToast();
@@ -40,7 +42,16 @@ export default function ProductManagement() {
     toast('Product deleted', 'info'); load();
   }
 
-  const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+  const sorted = [...products].sort((a, b) => {
+    if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
+    if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
+    if (sortBy === 'price-asc') return a.price - b.price;
+    if (sortBy === 'price-desc') return b.price - a.price;
+    if (sortBy === 'category') return a.category.localeCompare(b.category);
+    return 0;
+  });
+
+  const filtered = sorted.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="animate-fade">
@@ -50,10 +61,16 @@ export default function ProductManagement() {
       </div>
       <div className="toolbar">
         <div className="search-bar"><Search size={16} /><input placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+        <div className="flex gap-8 items-center" style={{ marginLeft: 'auto' }}>
+          <span className="text-sm text-muted">Sort by:</span>
+          <select className="form-select" style={{ width: 160 }} value={sortBy} onChange={e => setSortBy(e.target.value)}>
+            {SORT_OPTIONS.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+          </select>
+        </div>
       </div>
       <div className="table-container">
         <table className="data-table">
-          <thead><tr><th>Name</th><th>Category</th><th>Price</th><th>Cost</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Category</th><th>Sub-Category</th><th>Price</th><th>Cost</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             {filtered.map(p => (
               <tr key={p.id}>
@@ -62,6 +79,7 @@ export default function ProductManagement() {
                   {p.name}
                 </td>
                 <td><span className="badge badge-info">{p.category}</span></td>
+                <td><span className="badge badge-neutral">{p.subCategory || '—'}</span></td>
                 <td>{formatCurrency(p.price)}</td>
                 <td>{formatCurrency(p.cost)}</td>
                 <td><span className={`badge ${p.isAvailable ? 'badge-success' : 'badge-danger'}`}>{p.isAvailable ? 'Available' : 'Unavailable'}</span></td>
@@ -99,8 +117,18 @@ export default function ProductManagement() {
               />
             </div>
           </div>
-          <div className="form-group"><label className="form-label">Category</label>
-            <select className="form-select" value={form.category} onChange={e => setForm({...form, category: e.target.value})}><option>Drinks</option><option>Food</option></select>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Category</label>
+              <select className="form-select" value={form.category} onChange={e => setForm({...form, category: e.target.value, subCategory: ''})}>
+                {Object.keys(CATEGORIES).map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="form-group"><label className="form-label">Sub-Category</label>
+              <select className="form-select" value={form.subCategory} onChange={e => setForm({...form, subCategory: e.target.value})}>
+                <option value="">Select Sub-Category</option>
+                {CATEGORIES[form.category]?.map(sc => <option key={sc}>{sc}</option>)}
+              </select>
+            </div>
           </div>
           <div className="form-row">
             <div className="form-group"><label className="form-label">Price (₱)</label><input className="form-input" type="number" value={form.price} onChange={e => setForm({...form, price: e.target.value})} /></div>

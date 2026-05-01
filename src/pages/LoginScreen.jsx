@@ -26,7 +26,7 @@ export default function LoginScreen() {
     <div className="login-screen">
       <div className="login-card">
         <div style={{ marginBottom: 8 }}>
-          <div className="logo-icon" style={{ width: 56, height: 56, fontSize: '1.1rem', margin: '0 auto 12px', background: 'var(--accent)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--bg-primary)', fontWeight: 800 }}>92</div>
+          <div className="logo-icon login-logo">92</div>
         </div>
         <h1>92Parameters</h1>
         <p>Enter your PIN to clock in</p>

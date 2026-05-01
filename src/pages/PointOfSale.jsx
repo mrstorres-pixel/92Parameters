@@ -10,10 +10,12 @@ import ProductGrid from '../components/pos/ProductGrid';
 import CartPanel from '../components/pos/CartPanel';
 import PaymentModal from '../components/pos/PaymentModal';
 import ReceiptModal from '../components/pos/ReceiptModal';
+import { CATEGORIES } from '../config/categories';
 
 export default function PointOfSale() {
   const [products, setProducts] = useState([]);
   const [category, setCategory] = useState('All');
+  const [subCategory, setSubCategory] = useState('All');
   const [search, setSearch] = useState('');
   const [showPayment, setShowPayment] = useState(false);
   const [receipt, setReceipt] = useState(null);
@@ -63,18 +65,35 @@ export default function PointOfSale() {
   return (
     <div className="pos-layout">
       <div className="pos-menu">
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div className="tabs" style={{ marginBottom: 0 }}>
-            {['All', 'Drinks', 'Food'].map(c => (
-              <button key={c} className={`tab ${category === c ? 'active' : ''}`} onClick={() => setCategory(c)}>{c}</button>
-            ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="tabs" style={{ marginBottom: 0 }}>
+              {['All', ...Object.keys(CATEGORIES)].map(c => (
+                <button key={c} className={`tab ${category === c ? 'active' : ''}`} onClick={() => { setCategory(c); setSubCategory('All'); }}>{c}</button>
+              ))}
+            </div>
+            <div className="search-bar">
+              <Search size={16} />
+              <input placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
           </div>
-          <div className="search-bar">
-            <Search size={16} />
-            <input placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
+
+          {category !== 'All' && CATEGORIES[category] && (
+            <div className="tabs" style={{ marginBottom: 0, padding: '4px 8px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)' }}>
+              {['All', ...CATEGORIES[category]].map(sc => (
+                <button 
+                  key={sc} 
+                  className={`tab ${subCategory === sc ? 'active' : ''}`} 
+                  onClick={() => setSubCategory(sc)}
+                  style={{ padding: '6px 12px', fontSize: '0.75rem' }}
+                >
+                  {sc}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        <ProductGrid products={products} category={category} searchQuery={search} onAdd={addItem} />
+        <ProductGrid products={products} category={category} subCategory={subCategory} searchQuery={search} onAdd={addItem} />
       </div>
       <CartPanel onCharge={() => setShowPayment(true)} />
       {showPayment && <PaymentModal total={calcCartTotal(cart)} onConfirm={handlePayment} onClose={() => setShowPayment(false)} />}
