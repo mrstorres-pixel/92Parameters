@@ -85,7 +85,7 @@ body {
   display: flex; align-items: center; justify-content: space-between; padding: 0 24px; flex-shrink: 0;
 }
 .header-left { display: flex; align-items: center; gap: 16px; }
-.header-left h2 { font-size: 1.25rem; font-weight: 600; color: #ffcc00 !important; }
+.header-left h2 { font-size: 1.25rem; font-weight: 600; }
 .header-right { display: flex; align-items: center; gap: 16px; }
 .header-clock { color: var(--text-secondary); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
 .header-staff { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--bg-card); border-radius: var(--radius-sm); }
@@ -513,10 +513,12 @@ body {
   .sidebar {
     position: fixed !important; top: 0 !important; left: 0 !important; bottom: 0 !important; z-index: 2001 !important;
     transform: translateX(-100%); width: 280px !important;
-    display: flex !important;
+    display: grid !important;
+    grid-template-rows: auto 1fr auto;
     box-shadow: 10px 0 30px rgba(0,0,0,0.5);
     height: 100dvh !important;
     max-height: 100dvh !important;
+    overflow: hidden !important;
   }
   .sidebar.mobile-open { transform: translateX(0) !important; }
   .sidebar-logo h1, .sidebar .nav-label { display: block !important; }
@@ -530,9 +532,21 @@ body {
   .menu-toggle { display: flex !important; color: #ffcc00 !important; margin-right: 15px !important; visibility: visible !important; opacity: 1 !important; }
   .header-right .btn-ghost { color: #ffffff !important; display: flex !important; visibility: visible !important; opacity: 1 !important; }
   .desktop-only { display: none !important; }
-  .sidebar-footer { position: absolute; bottom: 0; left: 0; right: 0; background: var(--bg-secondary); display: block !important; }
+  .sidebar-footer { position: relative !important; background: var(--bg-secondary); border-top: 1px solid var(--border); display: block !important; padding: 12px 16px !important; }
+  .sidebar-nav { overflow-y: auto !important; flex: none !important; }
   .page-content { padding: 16px; }
 }
+
+.sidebar { 
+  display: grid; 
+  grid-template-rows: auto 1fr auto; 
+  height: 100dvh !important; 
+  max-height: 100dvh !important; 
+  overflow: hidden !important; 
+}
+.sidebar-nav { overflow-y: auto !important; }
+.sidebar-footer { position: relative !important; border-top: 1px solid var(--border); }
+
 
 .menu-toggle { display: none; }
 .desktop-only { display: block; }
