@@ -510,6 +510,21 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 16px;
 }
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.report-table-card { overflow: hidden; }
+.summary-table { width: 100%; border-collapse: collapse; }
+.summary-table th, .summary-table td {
+  padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem;
+}
+.summary-table tr:last-child th, .summary-table tr:last-child td { border-bottom: none; }
+.summary-table th { text-align: left; color: var(--text-primary); font-weight: 700; }
+.summary-table td { text-align: right; color: var(--text-secondary); font-weight: 600; }
+.compact-table th, .compact-table td { padding: 10px 14px; }
 
 @media (max-width: 640px) {
   .dashboard-grid { grid-template-columns: 1fr; }

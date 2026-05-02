@@ -38,6 +38,7 @@ function getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackU
 
 export default function BusinessReport() {
   const [range, setRange] = useState('today');
+  const [paymentFilter, setPaymentFilter] = useState('All');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState(toDateInputValue(new Date()));
   const [lookbackAmount, setLookbackAmount] = useState(8);
@@ -61,7 +62,9 @@ export default function BusinessReport() {
 
   const { start, end } = getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackUnit);
 
-  const valid = txns.filter(t => t.status !== 'void');
+  const validAll = txns.filter(t => t.status !== 'void');
+  const paymentMethods = ['All', ...Array.from(new Set(validAll.map(t => t.paymentMethod || 'Unspecified'))).sort((a, b) => a.localeCompare(b))];
+  const valid = validAll.filter(t => paymentFilter === 'All' || (t.paymentMethod || 'Unspecified') === paymentFilter);
   const totalSales = valid.reduce((s,t) => s + (t.total || 0), 0);
   const avgTicket = valid.length ? totalSales / valid.length : 0;
   const totalItems = valid.reduce((s,t) => s + (t.items || []).reduce((a,i) => a + i.quantity, 0), 0);
@@ -72,12 +75,35 @@ export default function BusinessReport() {
     const cat = i.category || 'Other';
     catMap[cat] = (catMap[cat] || 0) + (i.price * (1 - (i.discount||0)/100) * i.quantity);
   }));
+  const catQtyMap = {};
+  const catCostMap = {};
+  valid.forEach(t => (t.items||[]).forEach(i => {
+    const cat = i.category || 'Other';
+    const qty = Number(i.quantity || 1);
+    catQtyMap[cat] = (catQtyMap[cat] || 0) + qty;
+    catCostMap[cat] = (catCostMap[cat] || 0) + Number(i.cost || 0) * qty;
+  }));
   const catData = Object.entries(catMap).map(([name, value]) => ({ name, value: Math.round(value) }));
+  const tabRows = Object.entries(catMap).map(([name, grossSales]) => ({
+    name,
+    quantity: catQtyMap[name] || 0,
+    grossSales,
+    cost: catCostMap[name] || 0,
+    netSales: grossSales - (catCostMap[name] || 0),
+  })).sort((a, b) => b.grossSales - a.grossSales);
 
   // Payment breakdown
   const payMap = {};
-  valid.forEach(t => { payMap[t.paymentMethod] = (payMap[t.paymentMethod] || 0) + t.total; });
-  const payData = Object.entries(payMap).map(([name, value]) => ({ name, value: Math.round(value) }));
+  const payQtyMap = {};
+  validAll.forEach(t => {
+    const method = t.paymentMethod || 'Unspecified';
+    payMap[method] = (payMap[method] || 0) + t.total;
+    payQtyMap[method] = (payQtyMap[method] || 0) + 1;
+  });
+  const payRows = Object.entries(payMap).map(([name, value]) => ({ name, quantity: payQtyMap[name] || 0, value })).sort((a, b) => b.value - a.value);
+  const payData = payRows.map(({ name, value }) => ({ name, value: Math.round(value) }));
+  const payTotalQty = payRows.reduce((sum, row) => sum + row.quantity, 0);
+  const payTotalAmount = payRows.reduce((sum, row) => sum + row.value, 0);
 
   // Top products
   const prodMap = {};
@@ -126,6 +152,14 @@ export default function BusinessReport() {
         </div>
       )}
 
+      <div className="toolbar">
+        <span className="text-sm text-muted">Payment method:</span>
+        <select className="form-select" style={{ width: 190 }} value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)}>
+          {paymentMethods.map(method => <option key={method} value={method}>{method}</option>)}
+        </select>
+        <span className="text-sm text-muted">{paymentFilter === 'All' ? 'Showing all settlements' : `Showing ${paymentFilter} sales only`}</span>
+      </div>
+
       <div className="stat-grid">
         <div className="stat-card"><div className="stat-label">Total Sales</div><div className="stat-value">{formatCurrency(totalSales)}</div></div>
         <div className="stat-card"><div className="stat-label">Transactions</div><div className="stat-value">{valid.length}</div></div>
@@ -133,6 +167,60 @@ export default function BusinessReport() {
         <div className="stat-card"><div className="stat-label">Items Sold</div><div className="stat-value">{totalItems}</div></div>
         <div className="stat-card"><div className="stat-label">Cost of Goods</div><div className="stat-value">{formatCurrency(stats.cost)}</div></div>
         <div className="stat-card"><div className="stat-label">Gross Profit</div><div className="stat-value" style={{ color: 'var(--success)' }}>{formatCurrency(stats.profit)}</div></div>
+      </div>
+
+      <div className="report-grid">
+        <div className="card report-table-card">
+          <div className="card-title mb-16">Sales Information</div>
+          <table className="summary-table">
+            <tbody>
+              <tr><th>Total Sales</th><td>{formatCurrency(totalSales)}</td></tr>
+              <tr><th>Total Cost</th><td>{formatCurrency(stats.cost)}</td></tr>
+              <tr><th>Gross Profit</th><td>{formatCurrency(stats.profit)}</td></tr>
+              <tr><th>Transactions</th><td>{valid.length}</td></tr>
+              <tr><th>Items Sold</th><td>{totalItems}</td></tr>
+              <tr><th>Average Ticket</th><td>{formatCurrency(avgTicket)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div className="card report-table-card">
+          <div className="card-title mb-16">Total Settlement by Payment Method</div>
+          <table className="data-table compact-table">
+            <thead><tr><th>Method</th><th>Quantity</th><th className="text-right">Amount</th></tr></thead>
+            <tbody>
+              {payRows.map(row => (
+                <tr key={row.name}><td>{row.name}</td><td>{row.quantity}</td><td className="text-right">{formatCurrency(row.value)}</td></tr>
+              ))}
+              <tr><td style={{ fontWeight: 700 }}>Total Settlement</td><td style={{ fontWeight: 700 }}>{payTotalQty}</td><td className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(payTotalAmount)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card report-table-card mb-16">
+        <div className="card-title mb-16">Sales by Tab</div>
+        <table className="data-table compact-table">
+          <thead><tr><th>Tab</th><th>Quantity Sold</th><th className="text-right">Gross Sales</th><th className="text-right">Cost</th><th className="text-right">Net Sales</th></tr></thead>
+          <tbody>
+            {tabRows.map(row => (
+              <tr key={row.name}>
+                <td>{row.name}</td>
+                <td>{row.quantity}</td>
+                <td className="text-right">{formatCurrency(row.grossSales)}</td>
+                <td className="text-right">{formatCurrency(row.cost)}</td>
+                <td className="text-right">{formatCurrency(row.netSales)}</td>
+              </tr>
+            ))}
+            <tr>
+              <td style={{ fontWeight: 700 }}>Total</td>
+              <td style={{ fontWeight: 700 }}>{totalItems}</td>
+              <td className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(totalSales)}</td>
+              <td className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(stats.cost)}</td>
+              <td className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(stats.profit)}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
