@@ -41,7 +41,20 @@ export default function TransactionReport() {
       const links = await db.productIngredients.where('productId').equals(item.productId).toArray();
       for (const link of links) {
         const ing = await db.ingredients.get(link.ingredientId);
-        if (ing) { await db.ingredients.update(link.ingredientId, { inStock: ing.inStock + link.quantity * item.quantity }); }
+        if (ing) {
+          const restored = link.quantity * item.quantity;
+          const nextStock = ing.inStock + restored;
+          await db.ingredients.update(link.ingredientId, { inStock: nextStock });
+          await db.auditLog.add({
+            action: 'RESTOCK',
+            entity: ing.name,
+            entityId: link.ingredientId,
+            staffId: manager.id,
+            staffName: manager.name,
+            datetime: Date.now(),
+            details: `Restored ${restored}${ing.unit} from voided ${txn.receiptNo}; stock ${ing.inStock}${ing.unit} -> ${nextStock}${ing.unit}`
+          });
+        }
       }
     }
 

@@ -12,7 +12,7 @@ export const usePosStore = create((set, get) => ({
     if (existing) {
       set({ cart: cart.map(i => i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i) });
     } else {
-      set({ cart: [...cart, { productId: product.id, name: product.name, price: product.price, cost: product.cost || 0, quantity: 1, discount: 0 }] });
+      set({ cart: [...cart, { productId: product.id, name: product.name, category: product.category, subCategory: product.subCategory, price: product.price, cost: product.cost || 0, quantity: 1, discount: 0 }] });
     }
   },
 

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, AlertTriangle, History } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, formatDateTime } from '../utils/formatters';
 import { calcStockValue } from '../utils/calculations';
 import { getStockStatusLabel, getStockStatus } from '../utils/formatters';
 
@@ -14,6 +14,8 @@ export default function Ingredients() {
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
+  const [historyItem, setHistoryItem] = useState(null);
+  const [historyLogs, setHistoryLogs] = useState([]);
   const [form, setForm] = useState(empty);
   const { currentStaff } = useAuthStore();
   const toast = useToast();
@@ -23,6 +25,12 @@ export default function Ingredients() {
 
   function openNew() { setForm(empty); setEditing('new'); }
   function openEdit(item) { setForm({ ...item }); setEditing(item.id); }
+
+  async function openHistory(item) {
+    setHistoryItem(item);
+    const logs = await db.auditLog.toArray();
+    setHistoryLogs(logs.filter(log => log.entity === item.name).sort((a, b) => b.datetime - a.datetime));
+  }
 
   async function save() {
     if (!form.name) return;
@@ -78,7 +86,7 @@ export default function Ingredients() {
               const status = getStockStatus(item.inStock, item.lowThreshold || 0);
               const badgeClass = status === 'out' ? 'badge-danger' : status === 'low' ? 'badge-warning' : 'badge-success';
               return (
-                <tr key={item.id}>
+                <tr key={item.id} className="clickable" onClick={() => openHistory(item)}>
                   <td style={{ fontWeight: 500 }}>{item.name}</td>
                   <td>{item.unit}</td>
                   <td>{item.inStock} {item.unit}</td>
@@ -88,8 +96,9 @@ export default function Ingredients() {
                   <td>{item.lowThreshold || 0} {item.unit}</td>
                   <td>
                     <div className="flex gap-8">
-                      <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openEdit(item)}><Edit2 size={14} /></button>
-                      <button className="btn btn-ghost btn-icon btn-sm" onClick={() => remove(item.id)}><Trash2 size={14} /></button>
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); openHistory(item); }} title="History"><History size={14} /></button>
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); openEdit(item); }} title="Edit"><Edit2 size={14} /></button>
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); remove(item.id); }} title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -116,6 +125,38 @@ export default function Ingredients() {
             <div className="form-group"><label className="form-label">Unit Cost (₱)</label><input className="form-input" type="number" value={form.unitCost} onChange={e => setForm({...form, unitCost: e.target.value})} /></div>
             <div className="form-group"><label className="form-label">Low Stock Threshold</label><input className="form-input" type="number" value={form.lowThreshold} onChange={e => setForm({...form, lowThreshold: e.target.value})} /></div>
           </div>
+        </Modal>
+      )}
+
+      {historyItem && (
+        <Modal title={`${historyItem.name} History`} large onClose={() => setHistoryItem(null)} footer={
+          <button className="btn btn-primary" onClick={() => setHistoryItem(null)}>Close</button>
+        }>
+          {historyLogs.length === 0 ? (
+            <div className="empty-state" style={{ padding: '32px 20px' }}>
+              <History size={40} />
+              <p>No history recorded for this ingredient yet.</p>
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="data-table">
+                <thead><tr><th>Date & Time</th><th>Action</th><th>Staff</th><th>Details</th></tr></thead>
+                <tbody>
+                  {historyLogs.map(log => {
+                    const badgeClass = log.action === 'CREATE' || log.action === 'RESTOCK' ? 'badge-success' : log.action === 'UPDATE' ? 'badge-warning' : log.action === 'DEDUCT' || log.action === 'DELETE' ? 'badge-danger' : 'badge-neutral';
+                    return (
+                      <tr key={log.id}>
+                        <td style={{ whiteSpace: 'nowrap' }}>{formatDateTime(log.datetime)}</td>
+                        <td><span className={`badge ${badgeClass}`}>{log.action}</span></td>
+                        <td>{log.staffName || 'System'}</td>
+                        <td style={{ color: 'var(--text-secondary)', maxWidth: 360 }}>{log.details}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Modal>
       )}
     </div>

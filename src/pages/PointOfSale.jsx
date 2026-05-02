@@ -34,7 +34,7 @@ export default function PointOfSale() {
       total, cashReceived: method === 'Cash' ? cashReceived : null,
       staffId: currentStaff?.id, staffName: currentStaff?.name, status: 'completed',
     };
-    await db.transactions.add(txn);
+    const transactionId = await db.transactions.add(txn);
 
     // Deduct ingredients
     for (const item of cart) {
@@ -42,7 +42,18 @@ export default function PointOfSale() {
       for (const link of links) {
         const ing = await db.ingredients.get(link.ingredientId);
         if (ing) {
-          await db.ingredients.update(link.ingredientId, { inStock: Math.max(0, ing.inStock - link.quantity * item.quantity) });
+          const deducted = link.quantity * item.quantity;
+          const nextStock = Math.max(0, ing.inStock - deducted);
+          await db.ingredients.update(link.ingredientId, { inStock: nextStock });
+          await db.auditLog.add({
+            action: 'DEDUCT',
+            entity: ing.name,
+            entityId: link.ingredientId,
+            staffId: currentStaff?.id,
+            staffName: currentStaff?.name,
+            datetime: Date.now(),
+            details: `Deducted ${deducted}${ing.unit} for ${item.quantity} x ${item.name} (${receiptNo}); stock ${ing.inStock}${ing.unit} -> ${nextStock}${ing.unit}`
+          });
         }
       }
 
@@ -56,7 +67,7 @@ export default function PointOfSale() {
       }
     }
 
-    setReceipt(txn);
+    setReceipt({ ...txn, id: transactionId });
     setShowPayment(false);
     clearCart();
     toast('Transaction completed!', 'success');

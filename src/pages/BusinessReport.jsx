@@ -6,24 +6,54 @@ import { calcGrossProfit } from '../utils/calculations';
 
 const COLORS = ['#d4982a', '#f59e0b', '#34d399', '#60a5fa', '#a78bfa', '#f87171'];
 
+function toDateInputValue(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackUnit) {
+  const now = new Date();
+  let start = new Date();
+  let end = new Date(now);
+  start.setHours(0,0,0,0);
+  end.setHours(23,59,59,999);
+
+  if (range === 'week') start.setDate(start.getDate() - 7);
+  else if (range === 'month') start.setMonth(start.getMonth() - 1);
+  else if (range === 'year') start.setFullYear(start.getFullYear() - 1);
+  else if (range === 'lookback') {
+    const amount = Math.max(1, Number(lookbackAmount || 1));
+    if (lookbackUnit === 'years') start.setFullYear(start.getFullYear() - amount);
+    else if (lookbackUnit === 'months') start.setMonth(start.getMonth() - amount);
+    else start.setDate(start.getDate() - amount);
+  } else if (range === 'custom') {
+    start = customStart ? new Date(`${customStart}T00:00:00`) : new Date(0);
+    end = customEnd ? new Date(`${customEnd}T23:59:59.999`) : new Date(now);
+  } else if (range === 'all') {
+    start = new Date(0);
+  }
+
+  return { start, end };
+}
+
 export default function BusinessReport() {
   const [range, setRange] = useState('today');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState(toDateInputValue(new Date()));
+  const [lookbackAmount, setLookbackAmount] = useState(8);
+  const [lookbackUnit, setLookbackUnit] = useState('months');
   const [txns, setTxns] = useState([]);
   const [stats, setStats] = useState({ revenue: 0, cost: 0, profit: 0 });
 
-  useEffect(() => { load(); }, [range]);
+  useEffect(() => { load(); }, [range, customStart, customEnd, lookbackAmount, lookbackUnit]);
 
   async function load() {
-    const now = new Date();
-    let start = new Date(); start.setHours(0,0,0,0);
-    if (range === 'week') start.setDate(start.getDate() - 7);
-    else if (range === 'month') start.setMonth(start.getMonth() - 1);
-    else if (range === 'all') start = new Date(0);
-
-    const all = await db.transactions.where('datetime').above(start.getTime()).toArray();
+    const { start, end } = getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackUnit);
+    const all = (await db.transactions.toArray()).filter(t => t.datetime >= start.getTime() && t.datetime <= end.getTime());
     setTxns(all);
     setStats(calcGrossProfit(all));
   }
+
+  const { start, end } = getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackUnit);
 
   const valid = txns.filter(t => t.status !== 'void');
   const totalSales = valid.reduce((s,t) => s + (t.total || 0), 0);
@@ -62,11 +92,33 @@ export default function BusinessReport() {
       <div className="page-header">
         <h2>Business Report</h2>
         <div className="tabs" style={{ marginBottom: 0 }}>
-          {[['today','Today'],['week','This Week'],['month','This Month'],['all','All Time']].map(([k,l]) => (
+          {[['today','Today'],['week','7 Days'],['month','30 Days'],['year','Last Year'],['lookback','Look Back'],['custom','Custom'],['all','All Time']].map(([k,l]) => (
             <button key={k} className={`tab ${range === k ? 'active' : ''}`} onClick={() => setRange(k)}>{l}</button>
           ))}
         </div>
       </div>
+
+      {(range === 'lookback' || range === 'custom') && (
+        <div className="toolbar">
+          {range === 'lookback' && (
+            <>
+              <input className="form-input" style={{ width: 100 }} type="number" min="1" value={lookbackAmount} onChange={e => setLookbackAmount(e.target.value)} />
+              <select className="form-select" style={{ width: 140 }} value={lookbackUnit} onChange={e => setLookbackUnit(e.target.value)}>
+                <option value="days">Days ago</option>
+                <option value="months">Months ago</option>
+                <option value="years">Years ago</option>
+              </select>
+            </>
+          )}
+          {range === 'custom' && (
+            <>
+              <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">From</label><input className="form-input" type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} /></div>
+              <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">To</label><input className="form-input" type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} /></div>
+            </>
+          )}
+          <span className="text-sm text-muted">Showing {start.toLocaleDateString()} to {end.toLocaleDateString()}</span>
+        </div>
+      )}
 
       <div className="stat-grid">
         <div className="stat-card"><div className="stat-label">Total Sales</div><div className="stat-value">{formatCurrency(totalSales)}</div></div>

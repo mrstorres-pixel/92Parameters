@@ -56,8 +56,9 @@ export default function AuditLog() {
                   <td style={{ whiteSpace: 'nowrap' }}>{formatDateTime(log.datetime)}</td>
                   <td>
                     <span className={`badge ${
-                      log.action === 'CREATE' ? 'badge-success' : 
-                      log.action === 'UPDATE' ? 'badge-warning' : 'badge-danger'
+                      log.action === 'CREATE' || log.action === 'RESTOCK' ? 'badge-success' :
+                      log.action === 'UPDATE' ? 'badge-warning' :
+                      log.action === 'DEDUCT' || log.action === 'DELETE' ? 'badge-danger' : 'badge-neutral'
                     }`}>
                       {log.action}
                     </span>

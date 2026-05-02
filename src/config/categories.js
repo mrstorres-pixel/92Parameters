@@ -6,6 +6,8 @@ export const CATEGORIES = {
     'Milk Tea and Tea'
   ],
   'Food': [
+    'Starters',
+    'Salad',
     'Rice Meal', 
     'Pasta', 
     'Sandwich and Burger', 

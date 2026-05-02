@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, Link as LinkIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Link as LinkIcon, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import RecipeModal from '../components/products/RecipeModal';
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
 import { formatCurrency } from '../utils/formatters';
-import { CATEGORIES, SORT_OPTIONS } from '../config/categories';
+import { CATEGORIES } from '../config/categories';
 
 const empty = { name: '', category: 'Drinks', subCategory: '', price: '', cost: '', isAvailable: true, emoji: '☕' };
 
@@ -17,6 +17,7 @@ export default function ProductManagement() {
   const [recipeProduct, setRecipeProduct] = useState(null);
   const [form, setForm] = useState(empty);
   const [sortBy, setSortBy] = useState('name-asc');
+  const [subCategoryFilter, setSubCategoryFilter] = useState('All');
   const { currentStaff } = useAuthStore();
   const isOwner = currentStaff?.role === 'owner';
   const toast = useToast();
@@ -42,6 +43,22 @@ export default function ProductManagement() {
     toast('Product deleted', 'info'); load();
   }
 
+  const allSubCategories = Array.from(new Set(Object.values(CATEGORIES).flat())).sort((a, b) => a.localeCompare(b));
+
+  function toggleSort(field) {
+    setSortBy(current => {
+      if (field === 'name') return current === 'name-asc' ? 'name-desc' : 'name-asc';
+      if (field === 'price') return current === 'price-asc' ? 'price-desc' : 'price-asc';
+      return current;
+    });
+  }
+
+  function SortIcon({ field }) {
+    const active = sortBy.startsWith(field);
+    if (!active) return <ArrowUpDown size={13} />;
+    return sortBy.endsWith('asc') ? <ArrowUp size={13} /> : <ArrowDown size={13} />;
+  }
+
   const sorted = [...products].sort((a, b) => {
     if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
     if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
@@ -51,7 +68,11 @@ export default function ProductManagement() {
     return 0;
   });
 
-  const filtered = sorted.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = sorted.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    const matchesSubCategory = subCategoryFilter === 'All' || p.subCategory === subCategoryFilter;
+    return matchesSearch && matchesSubCategory;
+  });
 
   return (
     <div className="animate-fade">
@@ -62,15 +83,21 @@ export default function ProductManagement() {
       <div className="toolbar">
         <div className="search-bar"><Search size={16} /><input placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} /></div>
         <div className="flex gap-8 items-center" style={{ marginLeft: 'auto' }}>
-          <span className="text-sm text-muted">Sort by:</span>
-          <select className="form-select" style={{ width: 160 }} value={sortBy} onChange={e => setSortBy(e.target.value)}>
-            {SORT_OPTIONS.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+          <span className="text-sm text-muted">Sub-category:</span>
+          <select className="form-select" style={{ width: 210 }} value={subCategoryFilter} onChange={e => setSubCategoryFilter(e.target.value)}>
+            <option value="All">All Sub-categories</option>
+            {allSubCategories.map(sc => <option key={sc} value={sc}>{sc}</option>)}
           </select>
         </div>
       </div>
       <div className="table-container">
         <table className="data-table">
-          <thead><tr><th>Name</th><th>Category</th><th>Sub-Category</th><th>Price</th><th>Cost</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th><button className={`table-sort ${sortBy.startsWith('name') ? 'active' : ''}`} onClick={() => toggleSort('name')}>Name <SortIcon field="name" /></button></th>
+            <th>Category</th><th>Sub-Category</th>
+            <th><button className={`table-sort ${sortBy.startsWith('price') ? 'active' : ''}`} onClick={() => toggleSort('price')}>Price <SortIcon field="price" /></button></th>
+            <th>Cost</th><th>Status</th><th>Actions</th>
+          </tr></thead>
           <tbody>
             {filtered.map(p => (
               <tr key={p.id}>
