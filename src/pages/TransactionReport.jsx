@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Eye, Ban } from 'lucide-react';
+import { Search, Ban, Trash2 } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import ReceiptModal from '../components/pos/ReceiptModal';
 import { useToast } from '../components/common/Toast';
+import { useAuthStore } from '../stores/authStore';
 import { formatCurrency, formatDate, formatTime, formatDateTime } from '../utils/formatters';
 import { calcItemTotal } from '../utils/calculations';
 import { PAGE_SIZE, recordIngredientMovement, reverseDailySalesSummary } from '../utils/durability';
@@ -18,11 +19,48 @@ export default function TransactionReport() {
   const [voidReason, setVoidReason] = useState('');
   const [managerPin, setManagerPin] = useState('');
   const [voidError, setVoidError] = useState('');
+  const currentStaff = useAuthStore(s => s.currentStaff);
+  const isOwner = currentStaff?.role === 'owner';
   const toast = useToast();
 
   useEffect(() => { load(); }, [page]);
   async function load() {
     setTxns(await db.transactions.query({ orderBy: 'datetime', ascending: false, limit: PAGE_SIZE, offset: page * PAGE_SIZE }));
+  }
+
+  async function restoreTransactionIngredients(txn, staff, reason) {
+    for (const item of (txn.items || [])) {
+      const links = await db.productIngredients.where('productId').equals(item.productId).toArray();
+      for (const link of links) {
+        const ing = await db.ingredients.get(link.ingredientId);
+        if (ing) {
+          const restored = link.quantity * item.quantity;
+          const nextStock = ing.inStock + restored;
+          await db.ingredients.update(link.ingredientId, { inStock: nextStock });
+          await db.auditLog.add({
+            action: 'RESTOCK',
+            entity: ing.name,
+            entityId: link.ingredientId,
+            staffId: staff?.id,
+            staffName: staff?.name,
+            datetime: Date.now(),
+            details: `Restored ${restored}${ing.unit} from ${reason} ${txn.receiptNo}; stock ${ing.inStock}${ing.unit} -> ${nextStock}${ing.unit}`
+          });
+          await recordIngredientMovement({
+            ingredient: ing,
+            ingredientId: link.ingredientId,
+            transactionId: txn.id,
+            receiptNo: txn.receiptNo,
+            type: 'RESTOCK',
+            quantity: restored,
+            beforeStock: ing.inStock,
+            afterStock: nextStock,
+            staff,
+            productName: item.name,
+          });
+        }
+      }
+    }
   }
 
   async function handleVoid() {
@@ -41,47 +79,41 @@ export default function TransactionReport() {
         originalData: JSON.parse(JSON.stringify(txn)),
       });
       await reverseDailySalesSummary(txn);
-
-      // Reverse ingredient deductions
-      for (const item of (txn.items || [])) {
-        const links = await db.productIngredients.where('productId').equals(item.productId).toArray();
-        for (const link of links) {
-          const ing = await db.ingredients.get(link.ingredientId);
-          if (ing) {
-            const restored = link.quantity * item.quantity;
-            const nextStock = ing.inStock + restored;
-            await db.ingredients.update(link.ingredientId, { inStock: nextStock });
-            await db.auditLog.add({
-              action: 'RESTOCK',
-              entity: ing.name,
-              entityId: link.ingredientId,
-              staffId: manager.id,
-              staffName: manager.name,
-              datetime: Date.now(),
-              details: `Restored ${restored}${ing.unit} from voided ${txn.receiptNo}; stock ${ing.inStock}${ing.unit} -> ${nextStock}${ing.unit}`
-            });
-            await recordIngredientMovement({
-              ingredient: ing,
-              ingredientId: link.ingredientId,
-              transactionId: txn.id,
-              receiptNo: txn.receiptNo,
-              type: 'RESTOCK',
-              quantity: restored,
-              beforeStock: ing.inStock,
-              afterStock: nextStock,
-              staff: manager,
-              productName: item.name,
-            });
-          }
-        }
-      }
-
+      await restoreTransactionIngredients(txn, manager, 'voided');
       toast('Transaction voided');
       setShowVoid(null); setVoidReason(''); setManagerPin(''); setVoidError('');
       setSelected(null); load();
     } catch (error) {
       console.error('Void failed:', error);
       setVoidError('Could not void transaction. Please check the connection and try again.');
+    }
+  }
+
+  async function deleteTransaction(txn) {
+    if (!isOwner) return;
+    if (!window.confirm(`Delete transaction ${txn.receiptNo}? This removes the record and reverses stock/report totals if it was completed.`)) return;
+    try {
+      if (txn.status !== 'void') {
+        await reverseDailySalesSummary(txn);
+        await restoreTransactionIngredients(txn, currentStaff, 'deleted transaction');
+      }
+      await db.voidLog.where('transactionId').equals(txn.id).delete();
+      await db.transactions.delete(txn.id);
+      await db.auditLog.add({
+        action: 'DELETE_TRANSACTION',
+        entity: txn.receiptNo,
+        entityId: txn.id,
+        staffId: currentStaff?.id,
+        staffName: currentStaff?.name,
+        datetime: Date.now(),
+        details: `Deleted transaction ${txn.receiptNo}`
+      });
+      toast('Transaction deleted', 'info');
+      setSelected(null);
+      load();
+    } catch (error) {
+      console.error('Delete transaction failed:', error);
+      toast('Could not delete transaction. Please check the connection.', 'error');
     }
   }
 
@@ -129,6 +161,7 @@ export default function TransactionReport() {
       {selected && (
         <Modal title={`Transaction ${selected.receiptNo}`} large onClose={() => setSelected(null)} footer={
           <>
+            {isOwner && <button className="btn btn-danger" onClick={() => deleteTransaction(selected)}><Trash2 size={14} /> Delete</button>}
             {selected.status !== 'void' && <button className="btn btn-danger" onClick={() => { setShowVoid(selected); setSelected(null); }}><Ban size={14} /> Void</button>}
             <button className="btn btn-secondary" onClick={() => { setShowReceipt(selected); setSelected(null); }}>View Receipt</button>
             <button className="btn btn-primary" onClick={() => setSelected(null)}>Close</button>

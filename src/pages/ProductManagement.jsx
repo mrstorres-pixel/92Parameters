@@ -17,6 +17,7 @@ export default function ProductManagement() {
   const [recipeProduct, setRecipeProduct] = useState(null);
   const [form, setForm] = useState(empty);
   const [sortBy, setSortBy] = useState('name-asc');
+  const [categoryFilter, setCategoryFilter] = useState('All');
   const [subCategoryFilter, setSubCategoryFilter] = useState('All');
   const { currentStaff } = useAuthStore();
   const isOwner = currentStaff?.role === 'owner';
@@ -75,8 +76,9 @@ export default function ProductManagement() {
 
   const filtered = sorted.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = categoryFilter === 'All' || p.category === categoryFilter;
     const matchesSubCategory = subCategoryFilter === 'All' || p.subCategory === subCategoryFilter;
-    return matchesSearch && matchesSubCategory;
+    return matchesSearch && matchesCategory && matchesSubCategory;
   });
 
   return (
@@ -88,10 +90,15 @@ export default function ProductManagement() {
       <div className="toolbar">
         <div className="search-bar"><Search size={16} /><input placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} /></div>
         <div className="flex gap-8 items-center" style={{ marginLeft: 'auto' }}>
+          <span className="text-sm text-muted">Category:</span>
+          <select className="form-select" style={{ width: 150 }} value={categoryFilter} onChange={e => { setCategoryFilter(e.target.value); setSubCategoryFilter('All'); }}>
+            <option value="All">All Categories</option>
+            {Object.keys(CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           <span className="text-sm text-muted">Sub-category:</span>
           <select className="form-select" style={{ width: 210 }} value={subCategoryFilter} onChange={e => setSubCategoryFilter(e.target.value)}>
             <option value="All">All Sub-categories</option>
-            {allSubCategories.map(sc => <option key={sc} value={sc}>{sc}</option>)}
+            {(categoryFilter === 'All' ? allSubCategories : CATEGORIES[categoryFilter] || []).map(sc => <option key={sc} value={sc}>{sc}</option>)}
           </select>
         </div>
       </div>
