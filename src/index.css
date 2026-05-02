@@ -708,6 +708,13 @@ body {
 .summary-table th { text-align: left; color: var(--text-primary); font-weight: 700; }
 .summary-table td { text-align: right; color: var(--text-secondary); font-weight: 600; }
 .compact-table th, .compact-table td { padding: 10px 14px; }
+.mobile-card-table {
+  table-layout: fixed;
+}
+.mobile-card-table th,
+.mobile-card-table td {
+  width: auto;
+}
 .payment-total-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
 .payment-total-item {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
