@@ -186,13 +186,13 @@ export default function BusinessReport() {
 
         <div className="card report-table-card">
           <div className="card-title mb-16">Total Settlement by Payment Method</div>
-          <table className="data-table compact-table">
+          <table className="data-table compact-table mobile-card-table">
             <thead><tr><th>Method</th><th>Quantity</th><th className="text-right">Amount</th></tr></thead>
             <tbody>
               {payRows.map(row => (
-                <tr key={row.name}><td>{row.name}</td><td>{row.quantity}</td><td className="text-right">{formatCurrency(row.value)}</td></tr>
+                <tr key={row.name}><td data-label="Method">{row.name}</td><td data-label="Quantity">{row.quantity}</td><td data-label="Amount" className="text-right">{formatCurrency(row.value)}</td></tr>
               ))}
-              <tr><td style={{ fontWeight: 700 }}>Total Settlement</td><td style={{ fontWeight: 700 }}>{payTotalQty}</td><td className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(payTotalAmount)}</td></tr>
+              <tr><td data-label="Method" style={{ fontWeight: 700 }}>Total Settlement</td><td data-label="Quantity" style={{ fontWeight: 700 }}>{payTotalQty}</td><td data-label="Amount" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(payTotalAmount)}</td></tr>
             </tbody>
           </table>
         </div>
@@ -200,24 +200,24 @@ export default function BusinessReport() {
 
       <div className="card report-table-card mb-16">
         <div className="card-title mb-16">Sales by Tab</div>
-        <table className="data-table compact-table">
+        <table className="data-table compact-table mobile-card-table">
           <thead><tr><th>Tab</th><th>Quantity Sold</th><th className="text-right">Gross Sales</th><th className="text-right">Cost</th><th className="text-right">Net Sales</th></tr></thead>
           <tbody>
             {tabRows.map(row => (
               <tr key={row.name}>
-                <td>{row.name}</td>
-                <td>{row.quantity}</td>
-                <td className="text-right">{formatCurrency(row.grossSales)}</td>
-                <td className="text-right">{formatCurrency(row.cost)}</td>
-                <td className="text-right">{formatCurrency(row.netSales)}</td>
+                <td data-label="Tab">{row.name}</td>
+                <td data-label="Quantity Sold">{row.quantity}</td>
+                <td data-label="Gross Sales" className="text-right">{formatCurrency(row.grossSales)}</td>
+                <td data-label="Cost" className="text-right">{formatCurrency(row.cost)}</td>
+                <td data-label="Net Sales" className="text-right">{formatCurrency(row.netSales)}</td>
               </tr>
             ))}
             <tr>
-              <td style={{ fontWeight: 700 }}>Total</td>
-              <td style={{ fontWeight: 700 }}>{totalItems}</td>
-              <td className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(totalSales)}</td>
-              <td className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(stats.cost)}</td>
-              <td className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(stats.profit)}</td>
+              <td data-label="Tab" style={{ fontWeight: 700 }}>Total</td>
+              <td data-label="Quantity Sold" style={{ fontWeight: 700 }}>{totalItems}</td>
+              <td data-label="Gross Sales" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(totalSales)}</td>
+              <td data-label="Cost" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(stats.cost)}</td>
+              <td data-label="Net Sales" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(stats.profit)}</td>
             </tr>
           </tbody>
         </table>
