@@ -38,6 +38,30 @@ create index if not exists idx_void_log_datetime on public.void_log (datetime);
 create index if not exists idx_ingredient_movements_ingredient_datetime on public.ingredient_movements ("ingredientId", datetime);
 create index if not exists idx_daily_sales_summary_business_date on public.daily_sales_summary ("businessDate");
 
+grant select, insert, update, delete on public.daily_sales_summary to anon, authenticated;
+grant select, insert, update, delete on public.ingredient_movements to anon, authenticated;
+grant usage, select on sequence public.daily_sales_summary_id_seq to anon, authenticated;
+grant usage, select on sequence public.ingredient_movements_id_seq to anon, authenticated;
+
+alter table public.daily_sales_summary enable row level security;
+alter table public.ingredient_movements enable row level security;
+
+drop policy if exists "Allow app access to daily sales summary" on public.daily_sales_summary;
+create policy "Allow app access to daily sales summary"
+on public.daily_sales_summary
+for all
+to anon, authenticated
+using (true)
+with check (true);
+
+drop policy if exists "Allow app access to ingredient movements" on public.ingredient_movements;
+create policy "Allow app access to ingredient movements"
+on public.ingredient_movements
+for all
+to anon, authenticated
+using (true)
+with check (true);
+
 do $$
 begin
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'products' and column_name = 'price') then
