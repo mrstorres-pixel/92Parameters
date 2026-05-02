@@ -446,6 +446,38 @@ body {
   .header-left h2 { font-size: 1rem; }
   .header-staff { max-width: 150px; overflow: hidden; }
   .header-staff span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  div[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+  .stat-card .stat-value {
+    font-size: 1.35rem;
+    overflow-wrap: anywhere;
+  }
+  .data-table th,
+  .data-table td {
+    white-space: nowrap;
+  }
+  .data-table td.truncate {
+    max-width: 240px !important;
+  }
+  .summary-table th,
+  .summary-table td {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border-bottom: none;
+    padding: 6px 0;
+  }
+  .summary-table tr {
+    display: block;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .summary-table tr:last-child { border-bottom: none; }
+  .summary-table td {
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
 }
 
 /* Touch Device Refinements */
@@ -512,6 +544,63 @@ body {
   }
   .modal-footer .btn {
     width: 100%;
+  }
+  .page-content {
+    padding: 12px;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+  .page-header {
+    margin-bottom: 16px;
+  }
+  .page-header h2 {
+    font-size: 1.2rem;
+  }
+  .stat-card {
+    padding: 14px;
+  }
+  .stat-card .stat-value {
+    font-size: 1.2rem;
+  }
+  .card {
+    padding: 14px;
+  }
+  .table-container {
+    margin-left: -4px;
+    margin-right: -4px;
+    width: calc(100% + 8px);
+  }
+  .data-table {
+    min-width: 760px;
+  }
+  .compact-table {
+    min-width: 560px;
+  }
+  .data-table th,
+  .data-table td {
+    padding: 9px 10px;
+    font-size: 0.78rem;
+  }
+  .data-table .btn-icon {
+    width: 32px;
+    height: 32px;
+  }
+  .payment-methods {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .payment-method {
+    padding: 12px 8px;
+  }
+  .payment-method span {
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+  }
+  .payment-total-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .payment-total-item strong {
+    overflow-wrap: anywhere;
   }
   
   /* Modal optimization */
