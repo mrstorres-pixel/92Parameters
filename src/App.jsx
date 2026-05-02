@@ -17,6 +17,7 @@ import TransactionReport from './pages/TransactionReport';
 import VoidLog from './pages/VoidLog';
 import StaffManagement from './pages/StaffManagement';
 import AuditLog from './pages/AuditLog';
+import Maintenance from './pages/Maintenance';
 
 export default function App() {
   const currentStaff = useAuthStore(s => s.currentStaff);
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/voids" element={<VoidLog />} />
             <Route path="/staff" element={<StaffManagement />} />
             <Route path="/audit" element={<AuditLog />} />
+            <Route path="/maintenance" element={<Maintenance />} />
           </Route>
         </Routes>
       </BrowserRouter>

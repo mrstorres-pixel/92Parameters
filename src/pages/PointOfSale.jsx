@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
 import { generateReceiptNo } from '../utils/formatters';
 import { calcCartTotal, calcItemTotal } from '../utils/calculations';
+import { recordIngredientMovement, updateDailySalesSummary } from '../utils/durability';
 import ProductGrid from '../components/pos/ProductGrid';
 import CartPanel from '../components/pos/CartPanel';
 import PaymentModal from '../components/pos/PaymentModal';
@@ -26,51 +27,81 @@ export default function PointOfSale() {
   useEffect(() => { db.products.toArray().then(setProducts); }, []);
 
   async function handlePayment(method, cashReceived) {
-    const total = calcCartTotal(cart);
-    const receiptNo = generateReceiptNo();
-    const txn = {
-      receiptNo, datetime: Date.now(), orderType,
-      items: cart.map(i => ({ ...i })), paymentMethod: method,
-      total, cashReceived: method === 'Cash' ? cashReceived : null,
-      staffId: currentStaff?.id, staffName: currentStaff?.name, status: 'completed',
-    };
-    const transactionId = await db.transactions.add(txn);
+    try {
+      const total = calcCartTotal(cart);
+      const receiptNo = generateReceiptNo();
+      const txn = {
+        receiptNo, datetime: Date.now(), orderType,
+        items: cart.map(i => ({ ...i })), paymentMethod: method,
+        total, cashReceived: method === 'Cash' ? cashReceived : null,
+        staffId: currentStaff?.id, staffName: currentStaff?.name, status: 'completed',
+      };
+      const transactionId = await db.transactions.add(txn);
+      const savedTxn = { ...txn, id: transactionId };
+      const summaryUpdated = await updateDailySalesSummary(savedTxn);
 
-    // Deduct ingredients
-    for (const item of cart) {
-      const links = await db.productIngredients.where('productId').equals(item.productId).toArray();
-      for (const link of links) {
-        const ing = await db.ingredients.get(link.ingredientId);
-        if (ing) {
-          const deducted = link.quantity * item.quantity;
-          const nextStock = Math.max(0, ing.inStock - deducted);
-          await db.ingredients.update(link.ingredientId, { inStock: nextStock });
-          await db.auditLog.add({
-            action: 'DEDUCT',
-            entity: ing.name,
-            entityId: link.ingredientId,
-            staffId: currentStaff?.id,
-            staffName: currentStaff?.name,
-            datetime: Date.now(),
-            details: `Deducted ${deducted}${ing.unit} for ${item.quantity} x ${item.name} (${receiptNo}); stock ${ing.inStock}${ing.unit} -> ${nextStock}${ing.unit}`
-          });
+      // Deduct ingredients
+      for (const item of cart) {
+        const links = await db.productIngredients.where('productId').equals(item.productId).toArray();
+        for (const link of links) {
+          const ing = await db.ingredients.get(link.ingredientId);
+          if (ing) {
+            const deducted = link.quantity * item.quantity;
+            const nextStock = Math.max(0, ing.inStock - deducted);
+            await db.ingredients.update(link.ingredientId, { inStock: nextStock });
+            await db.auditLog.add({
+              action: 'DEDUCT',
+              entity: ing.name,
+              entityId: link.ingredientId,
+              staffId: currentStaff?.id,
+              staffName: currentStaff?.name,
+              datetime: Date.now(),
+              details: `Deducted ${deducted}${ing.unit} for ${item.quantity} x ${item.name} (${receiptNo}); stock ${ing.inStock}${ing.unit} -> ${nextStock}${ing.unit}`
+            });
+            const movementRecorded = await recordIngredientMovement({
+              ingredient: ing,
+              ingredientId: link.ingredientId,
+              transactionId,
+              receiptNo,
+              type: 'DEDUCT',
+              quantity: deducted,
+              beforeStock: ing.inStock,
+              afterStock: nextStock,
+              staff: currentStaff,
+              productName: item.name,
+            });
+            if (!movementRecorded) {
+              await db.auditLog.add({
+                action: 'LEDGER_ERROR',
+                entity: ing.name,
+                entityId: link.ingredientId,
+                staffId: currentStaff?.id,
+                staffName: currentStaff?.name,
+                datetime: Date.now(),
+                details: `Ingredient movement ledger write failed for ${receiptNo}`
+              });
+            }
+          }
+        }
+
+        // Deduct inventory items (cups, lids, etc.)
+        const invLinks = await db.productInventory.where('productId').equals(item.productId).toArray();
+        for (const link of invLinks) {
+          const inv = await db.inventory.get(link.inventoryId);
+          if (inv) {
+            await db.inventory.update(link.inventoryId, { inStock: Math.max(0, inv.inStock - link.quantity * item.quantity) });
+          }
         }
       }
 
-      // Deduct inventory items (cups, lids, etc.)
-      const invLinks = await db.productInventory.where('productId').equals(item.productId).toArray();
-      for (const link of invLinks) {
-        const inv = await db.inventory.get(link.inventoryId);
-        if (inv) {
-          await db.inventory.update(link.inventoryId, { inStock: Math.max(0, inv.inStock - link.quantity * item.quantity) });
-        }
-      }
+      setReceipt(savedTxn);
+      setShowPayment(false);
+      clearCart();
+      toast(summaryUpdated ? 'Transaction completed!' : 'Transaction completed, but summary update failed. Check Maintenance.', summaryUpdated ? 'success' : 'error');
+    } catch (error) {
+      console.error('Payment failed:', error);
+      toast('Could not complete transaction. Please try again or check the connection.', 'error');
     }
-
-    setReceipt({ ...txn, id: transactionId });
-    setShowPayment(false);
-    clearCart();
-    toast('Transaction completed!', 'success');
   }
 
   return (

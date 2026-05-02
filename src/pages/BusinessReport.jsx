@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import db from '../db/database';
 import { formatCurrency } from '../utils/formatters';
 import { calcGrossProfit } from '../utils/calculations';
+import { getDateRangeFilters } from '../utils/durability';
 
 const COLORS = ['#d4982a', '#f59e0b', '#34d399', '#60a5fa', '#a78bfa', '#f87171'];
 
@@ -48,7 +49,12 @@ export default function BusinessReport() {
 
   async function load() {
     const { start, end } = getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackUnit);
-    const all = (await db.transactions.toArray()).filter(t => t.datetime >= start.getTime() && t.datetime <= end.getTime());
+    const all = await db.transactions.query({
+      filters: getDateRangeFilters(start, end),
+      orderBy: 'datetime',
+      ascending: true,
+      limit: 5000,
+    });
     setTxns(all);
     setStats(calcGrossProfit(all));
   }

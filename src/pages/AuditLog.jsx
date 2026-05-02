@@ -2,16 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { Search, History } from 'lucide-react';
 import db from '../db/database';
 import { formatDateTime } from '../utils/formatters';
+import { PAGE_SIZE } from '../utils/durability';
 
 export default function AuditLog() {
   const [logs, setLogs] = useState([]);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [page]);
 
   async function load() {
-    const allLogs = await db.auditLog.toArray();
-    setLogs(allLogs.sort((a, b) => b.datetime - a.datetime));
+    setLogs(await db.auditLog.query({ orderBy: 'datetime', ascending: false, limit: PAGE_SIZE, offset: page * PAGE_SIZE }));
   }
 
   const filtered = logs.filter(l => 
@@ -74,6 +75,12 @@ export default function AuditLog() {
           </table>
         </div>
       )}
+
+      <div className="pagination">
+        <button className="btn btn-secondary btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>Previous</button>
+        <span className="text-sm text-muted">Page {page + 1}</span>
+        <button className="btn btn-secondary btn-sm" onClick={() => setPage(p => p + 1)} disabled={logs.length < PAGE_SIZE}>Next</button>
+      </div>
     </div>
   );
 }

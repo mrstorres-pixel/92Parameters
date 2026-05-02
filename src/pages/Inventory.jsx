@@ -24,19 +24,24 @@ export default function Inventory() {
   function openEdit(item) { setForm({ ...item }); setEditing(item.id); }
 
   async function save() {
-    if (!form.name) return;
-    const data = { ...form, inStock: Number(form.inStock || 0), price: Number(form.price || 0), cost: Number(form.cost || 0) };
-    if (editing === 'new') { 
-      const id = await db.inventory.add(data); 
-      await db.auditLog.add({ action: 'CREATE', entity: data.name, entityId: id, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(), details: `Added with stock ${data.inStock}` });
-      toast('Item added'); 
+    if (!form.name) { toast('Item name is required', 'error'); return; }
+    if ([form.inStock, form.price, form.cost].some(v => Number(v || 0) < 0)) { toast('Stock, price, and cost cannot be negative', 'error'); return; }
+    try {
+      const data = { ...form, inStock: Number(form.inStock || 0), price: Number(form.price || 0), cost: Number(form.cost || 0) };
+      if (editing === 'new') { 
+        const id = await db.inventory.add(data); 
+        await db.auditLog.add({ action: 'CREATE', entity: data.name, entityId: id, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(), details: `Added with stock ${data.inStock}` });
+        toast('Item added'); 
+      }
+      else { 
+        await db.inventory.update(editing, data); 
+        await db.auditLog.add({ action: 'UPDATE', entity: data.name, entityId: editing, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(), details: `Updated stock to ${data.inStock}` });
+        toast('Item updated'); 
+      }
+      setEditing(null); load();
+    } catch {
+      toast('Could not save item. Please check the connection.', 'error');
     }
-    else { 
-      await db.inventory.update(editing, data); 
-      await db.auditLog.add({ action: 'UPDATE', entity: data.name, entityId: editing, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(), details: `Updated stock to ${data.inStock}` });
-      toast('Item updated'); 
-    }
-    setEditing(null); load();
   }
 
   async function remove(id) {

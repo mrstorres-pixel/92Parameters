@@ -6,6 +6,7 @@ import ReceiptModal from '../components/pos/ReceiptModal';
 import { useToast } from '../components/common/Toast';
 import { formatCurrency, formatDate, formatTime, formatDateTime } from '../utils/formatters';
 import { calcItemTotal } from '../utils/calculations';
+import { PAGE_SIZE, recordIngredientMovement, reverseDailySalesSummary } from '../utils/durability';
 
 export default function TransactionReport() {
   const [txns, setTxns] = useState([]);
@@ -13,54 +14,75 @@ export default function TransactionReport() {
   const [selected, setSelected] = useState(null);
   const [showReceipt, setShowReceipt] = useState(null);
   const [showVoid, setShowVoid] = useState(null);
+  const [page, setPage] = useState(0);
   const [voidReason, setVoidReason] = useState('');
   const [managerPin, setManagerPin] = useState('');
   const [voidError, setVoidError] = useState('');
   const toast = useToast();
 
-  useEffect(() => { load(); }, []);
-  async function load() { setTxns((await db.transactions.toArray()).sort((a,b) => b.datetime - a.datetime)); }
+  useEffect(() => { load(); }, [page]);
+  async function load() {
+    setTxns(await db.transactions.query({ orderBy: 'datetime', ascending: false, limit: PAGE_SIZE, offset: page * PAGE_SIZE }));
+  }
 
   async function handleVoid() {
-    const manager = await db.staff.where('pin').equals(managerPin).first();
-    if (!manager || (manager.role !== 'manager' && manager.role !== 'owner')) { 
-      setVoidError('Invalid manager or owner PIN'); 
-      return; 
-    }
+    try {
+      const manager = await db.staff.where('pin').equals(managerPin).first();
+      if (!manager || (manager.role !== 'manager' && manager.role !== 'owner')) {
+        setVoidError('Invalid manager or owner PIN');
+        return;
+      }
 
-    const txn = showVoid;
-    await db.transactions.update(txn.id, { status: 'void' });
-    await db.voidLog.add({
-      transactionId: txn.id, receiptNo: txn.receiptNo, reason: voidReason,
-      staffId: manager.id, staffName: manager.name, datetime: Date.now(),
-      originalData: JSON.parse(JSON.stringify(txn)),
-    });
+      const txn = showVoid;
+      await db.transactions.update(txn.id, { status: 'void' });
+      await db.voidLog.add({
+        transactionId: txn.id, receiptNo: txn.receiptNo, reason: voidReason,
+        staffId: manager.id, staffName: manager.name, datetime: Date.now(),
+        originalData: JSON.parse(JSON.stringify(txn)),
+      });
+      await reverseDailySalesSummary(txn);
 
-    // Reverse ingredient deductions
-    for (const item of (txn.items || [])) {
-      const links = await db.productIngredients.where('productId').equals(item.productId).toArray();
-      for (const link of links) {
-        const ing = await db.ingredients.get(link.ingredientId);
-        if (ing) {
-          const restored = link.quantity * item.quantity;
-          const nextStock = ing.inStock + restored;
-          await db.ingredients.update(link.ingredientId, { inStock: nextStock });
-          await db.auditLog.add({
-            action: 'RESTOCK',
-            entity: ing.name,
-            entityId: link.ingredientId,
-            staffId: manager.id,
-            staffName: manager.name,
-            datetime: Date.now(),
-            details: `Restored ${restored}${ing.unit} from voided ${txn.receiptNo}; stock ${ing.inStock}${ing.unit} -> ${nextStock}${ing.unit}`
-          });
+      // Reverse ingredient deductions
+      for (const item of (txn.items || [])) {
+        const links = await db.productIngredients.where('productId').equals(item.productId).toArray();
+        for (const link of links) {
+          const ing = await db.ingredients.get(link.ingredientId);
+          if (ing) {
+            const restored = link.quantity * item.quantity;
+            const nextStock = ing.inStock + restored;
+            await db.ingredients.update(link.ingredientId, { inStock: nextStock });
+            await db.auditLog.add({
+              action: 'RESTOCK',
+              entity: ing.name,
+              entityId: link.ingredientId,
+              staffId: manager.id,
+              staffName: manager.name,
+              datetime: Date.now(),
+              details: `Restored ${restored}${ing.unit} from voided ${txn.receiptNo}; stock ${ing.inStock}${ing.unit} -> ${nextStock}${ing.unit}`
+            });
+            await recordIngredientMovement({
+              ingredient: ing,
+              ingredientId: link.ingredientId,
+              transactionId: txn.id,
+              receiptNo: txn.receiptNo,
+              type: 'RESTOCK',
+              quantity: restored,
+              beforeStock: ing.inStock,
+              afterStock: nextStock,
+              staff: manager,
+              productName: item.name,
+            });
+          }
         }
       }
-    }
 
-    toast('Transaction voided');
-    setShowVoid(null); setVoidReason(''); setManagerPin(''); setVoidError('');
-    setSelected(null); load();
+      toast('Transaction voided');
+      setShowVoid(null); setVoidReason(''); setManagerPin(''); setVoidError('');
+      setSelected(null); load();
+    } catch (error) {
+      console.error('Void failed:', error);
+      setVoidError('Could not void transaction. Please check the connection and try again.');
+    }
   }
 
   const filtered = txns.filter(t => {
@@ -74,7 +96,7 @@ export default function TransactionReport() {
       <div className="page-header"><h2>Transaction Report</h2></div>
       <div className="toolbar">
         <div className="search-bar"><Search size={16} /><input placeholder="Search receipt #, staff, payment..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-        <span className="text-muted text-sm">{filtered.length} transaction{filtered.length !== 1 ? 's' : ''}</span>
+        <span className="text-muted text-sm">Showing {filtered.length} transaction{filtered.length !== 1 ? 's' : ''}</span>
       </div>
 
       <div className="table-container">
@@ -96,6 +118,12 @@ export default function TransactionReport() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="pagination">
+        <button className="btn btn-secondary btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>Previous</button>
+        <span className="text-sm text-muted">Page {page + 1}</span>
+        <button className="btn btn-secondary btn-sm" onClick={() => setPage(p => p + 1)} disabled={txns.length < PAGE_SIZE}>Next</button>
       </div>
 
       {selected && (

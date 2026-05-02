@@ -29,11 +29,16 @@ export default function ProductManagement() {
   function openEdit(p) { setForm({ ...p }); setEditing(p.id); }
 
   async function save() {
-    if (!form.name || !form.price) return;
-    const data = { ...form, price: Number(form.price), cost: Number(form.cost || 0) };
-    if (editing === 'new') { await db.products.add(data); toast('Product added'); }
-    else { await db.products.update(editing, data); toast('Product updated'); }
-    setEditing(null); load();
+    if (!form.name || form.price === '') { toast('Name and price are required', 'error'); return; }
+    if (Number(form.price) < 0 || Number(form.cost || 0) < 0) { toast('Price and cost cannot be negative', 'error'); return; }
+    try {
+      const data = { ...form, price: Number(form.price), cost: Number(form.cost || 0) };
+      if (editing === 'new') { await db.products.add(data); toast('Product added'); }
+      else { await db.products.update(editing, data); toast('Product updated'); }
+      setEditing(null); load();
+    } catch {
+      toast('Could not save product. Please check the connection.', 'error');
+    }
   }
 
   async function remove(id) {

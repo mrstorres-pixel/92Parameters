@@ -28,24 +28,39 @@ export default function Ingredients() {
 
   async function openHistory(item) {
     setHistoryItem(item);
-    const logs = await db.auditLog.toArray();
-    setHistoryLogs(logs.filter(log => log.entity === item.name).sort((a, b) => b.datetime - a.datetime));
+    const [logs, movements] = await Promise.all([
+      db.auditLog.query({ filters: [{ field: 'entity', op: 'eq', value: item.name }], orderBy: 'datetime', ascending: false, limit: 100 }),
+      db.ingredientMovements.query({ filters: [{ field: 'ingredientId', op: 'eq', value: item.id }], orderBy: 'datetime', ascending: false, limit: 100 }),
+    ]);
+    const movementLogs = movements.map(m => ({
+      id: `movement-${m.id}`,
+      action: m.type,
+      datetime: m.datetime,
+      staffName: m.staffName,
+      details: `${m.type === 'RESTOCK' ? 'Restored' : 'Deducted'} ${m.quantity}${m.unit || ''}${m.receiptNo ? ` (${m.receiptNo})` : ''}; stock ${m.beforeStock}${m.unit || ''} -> ${m.afterStock}${m.unit || ''}`,
+    }));
+    setHistoryLogs([...logs, ...movementLogs].sort((a, b) => b.datetime - a.datetime));
   }
 
   async function save() {
-    if (!form.name) return;
-    const data = { ...form, inStock: Number(form.inStock || 0), unitCost: Number(form.unitCost || 0), lowThreshold: Number(form.lowThreshold || 0) };
-    if (editing === 'new') { 
-      const id = await db.ingredients.add(data); 
-      await db.auditLog.add({ action: 'CREATE', entity: data.name, entityId: id, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(), details: `Added with stock ${data.inStock}${data.unit}` });
-      toast('Ingredient added'); 
+    if (!form.name) { toast('Ingredient name is required', 'error'); return; }
+    if ([form.inStock, form.unitCost, form.lowThreshold].some(v => Number(v || 0) < 0)) { toast('Stock, cost, and threshold cannot be negative', 'error'); return; }
+    try {
+      const data = { ...form, inStock: Number(form.inStock || 0), unitCost: Number(form.unitCost || 0), lowThreshold: Number(form.lowThreshold || 0) };
+      if (editing === 'new') { 
+        const id = await db.ingredients.add(data); 
+        await db.auditLog.add({ action: 'CREATE', entity: data.name, entityId: id, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(), details: `Added with stock ${data.inStock}${data.unit}` });
+        toast('Ingredient added'); 
+      }
+      else { 
+        await db.ingredients.update(editing, data); 
+        await db.auditLog.add({ action: 'UPDATE', entity: data.name, entityId: editing, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(), details: `Updated stock to ${data.inStock}${data.unit}` });
+        toast('Ingredient updated'); 
+      }
+      setEditing(null); load();
+    } catch {
+      toast('Could not save ingredient. Please check the connection.', 'error');
     }
-    else { 
-      await db.ingredients.update(editing, data); 
-      await db.auditLog.add({ action: 'UPDATE', entity: data.name, entityId: editing, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(), details: `Updated stock to ${data.inStock}${data.unit}` });
-      toast('Ingredient updated'); 
-    }
-    setEditing(null); load();
   }
 
   async function remove(id) {

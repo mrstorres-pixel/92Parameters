@@ -61,6 +61,9 @@ export default function StaffManagement() {
     if (existing && existing.id !== editing) {
       toast('This PIN is already in use by another staff member', 'error');
       return;
+    }
+    if (Number(form.hourlyRate || 0) < 0) {
+      toast('Hourly rate cannot be negative', 'error');
       return;
     }
 
@@ -72,21 +75,25 @@ export default function StaffManagement() {
       profileImage: form.profileImage
     };
 
-    if (editing === 'new') {
-      await db.staff.add(data);
-      toast('Staff member added successfully');
-    } else {
-      await db.staff.update(editing, data);
-      toast('Staff member updated successfully');
-      
-      // If the owner edits themselves, maybe update authStore?
-      if (currentStaff.id === editing) {
-        useAuthStore.getState().login(await db.staff.get(editing));
+    try {
+      if (editing === 'new') {
+        await db.staff.add(data);
+        toast('Staff member added successfully');
+      } else {
+        await db.staff.update(editing, data);
+        toast('Staff member updated successfully');
+        
+        // If the owner edits themselves, maybe update authStore?
+        if (currentStaff.id === editing) {
+          useAuthStore.getState().login(await db.staff.get(editing));
+        }
       }
+      
+      setEditing(null);
+      load();
+    } catch {
+      toast('Could not save staff member. Please check the connection.', 'error');
     }
-    
-    setEditing(null);
-    load();
   }
 
   async function remove(id) {

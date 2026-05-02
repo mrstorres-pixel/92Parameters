@@ -4,6 +4,26 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
+function applyFilters(query, filters = []) {
+  return filters.reduce((q, filter) => {
+    const { field, op, value } = filter;
+    if (op === 'eq') return q.eq(field, value);
+    if (op === 'gte') return q.gte(field, value);
+    if (op === 'lte') return q.lte(field, value);
+    if (op === 'gt') return q.gt(field, value);
+    if (op === 'lt') return q.lt(field, value);
+    if (op === 'ilike') return q.ilike(field, value);
+    return q;
+  }, query);
+}
+
+function handleMutationError(tableName, action, error) {
+  if (error) {
+    console.error(`Error ${action} ${tableName}:`, error);
+    throw error;
+  }
+}
+
 function buildTable(tableName) {
   return {
     async toArray() {
@@ -11,20 +31,33 @@ function buildTable(tableName) {
       if (error) console.error(`Error fetching ${tableName}:`, error);
       return data || [];
     },
+    async query({ select = '*', filters = [], orderBy, ascending = true, limit, offset = 0 } = {}) {
+      let query = applyFilters(supabase.from(tableName).select(select), filters);
+      if (orderBy) query = query.order(orderBy, { ascending });
+      if (typeof limit === 'number') query = query.range(offset, offset + limit - 1);
+      const { data, error } = await query;
+      if (error) console.error(`Error querying ${tableName}:`, error);
+      return data || [];
+    },
     async add(obj) {
       // Remove id to let PostgreSQL auto-increment
       const { id, ...rest } = obj;
       const { data, error } = await supabase.from(tableName).insert([rest]).select();
-      if (error) console.error(`Error adding to ${tableName}:`, error);
+      handleMutationError(tableName, 'adding to', error);
       return data?.[0]?.id;
+    },
+    async upsert(obj, options = {}) {
+      const { data, error } = await supabase.from(tableName).upsert(obj, options).select();
+      handleMutationError(tableName, 'upserting into', error);
+      return data?.[0];
     },
     async update(id, obj) {
       const { error } = await supabase.from(tableName).update(obj).eq('id', id);
-      if (error) console.error(`Error updating ${tableName}:`, error);
+      handleMutationError(tableName, 'updating', error);
     },
     async delete(id) {
       const { error } = await supabase.from(tableName).delete().eq('id', id);
-      if (error) console.error(`Error deleting from ${tableName}:`, error);
+      handleMutationError(tableName, 'deleting from', error);
     },
     async get(id) {
       const { data, error } = await supabase.from(tableName).select('*').eq('id', id).single();
@@ -33,6 +66,11 @@ function buildTable(tableName) {
     },
     async count() {
       const { count, error } = await supabase.from(tableName).select('*', { count: 'exact', head: true });
+      if (error) console.error(`Error counting ${tableName}:`, error);
+      return count || 0;
+    },
+    async filteredCount(filters = []) {
+      const { count, error } = await applyFilters(supabase.from(tableName).select('*', { count: 'exact', head: true }), filters);
       if (error) console.error(`Error counting ${tableName}:`, error);
       return count || 0;
     },
@@ -57,7 +95,7 @@ function buildTable(tableName) {
             },
             async delete() {
               const { error } = await supabase.from(tableName).delete().eq(field, value);
-              if (error) console.error(`Error where.equals.delete on ${tableName}:`, error);
+              handleMutationError(tableName, 'deleting from', error);
             }
           };
         },
@@ -83,6 +121,8 @@ const db = {
   productIngredients: buildTable('product_ingredients'),
   productInventory: buildTable('product_inventory'),
   transactions: buildTable('transactions'),
+  dailySalesSummary: buildTable('daily_sales_summary'),
+  ingredientMovements: buildTable('ingredient_movements'),
   cashDrawer: buildTable('cash_drawer'),
   timeRecords: buildTable('time_records'),
   voidLog: buildTable('void_log'),

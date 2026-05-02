@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import db from '../db/database';
 
@@ -7,18 +7,49 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const login = useAuthStore(s => s.login);
 
-  const handleKey = async (key) => {
+  const submitPin = useCallback(async (value) => {
+    if (value.length !== 4) return;
+    const staff = await db.staff.where('pin').equals(value).first();
+    if (staff) { login(staff); }
+    else { setError('Invalid PIN'); setTimeout(() => { setPin(''); setError(''); }, 1000); }
+  }, [login]);
+
+  const handleKey = useCallback(async (key) => {
     if (key === 'clear') { setPin(''); setError(''); return; }
     if (key === 'back') { setPin(p => p.slice(0, -1)); setError(''); return; }
+    if (key === 'submit') { await submitPin(pin); return; }
+    if (!/^\d$/.test(key) || pin.length >= 4) return;
+
     const newPin = pin + key;
-    if (newPin.length > 4) return;
     setPin(newPin);
     if (newPin.length === 4) {
       const staff = await db.staff.where('pin').equals(newPin).first();
       if (staff) { login(staff); }
       else { setError('Invalid PIN'); setTimeout(() => { setPin(''); setError(''); }, 1000); }
     }
-  };
+  }, [login, pin, submitPin]);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.repeat) return;
+      if (/^\d$/.test(event.key)) {
+        event.preventDefault();
+        handleKey(event.key);
+      } else if (event.key === 'Backspace') {
+        event.preventDefault();
+        handleKey('back');
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        handleKey('clear');
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        handleKey('submit');
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleKey]);
 
   const keys = ['1','2','3','4','5','6','7','8','9','clear','0','back'];
 

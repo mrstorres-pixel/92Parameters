@@ -21,14 +21,12 @@ export function generateReceiptNo() {
   const dateStr = now.getFullYear().toString() +
     String(now.getMonth() + 1).padStart(2, '0') +
     String(now.getDate()).padStart(2, '0');
-  const stored = JSON.parse(localStorage.getItem('receiptCounter') || '{}');
-  if (stored.date !== dateStr) {
-    stored.date = dateStr;
-    stored.count = 0;
-  }
-  stored.count++;
-  localStorage.setItem('receiptCounter', JSON.stringify(stored));
-  return `92P-${dateStr}-${String(stored.count).padStart(4, '0')}`;
+  const timeStr =
+    String(now.getHours()).padStart(2, '0') +
+    String(now.getMinutes()).padStart(2, '0') +
+    String(now.getSeconds()).padStart(2, '0');
+  const random = crypto.getRandomValues(new Uint16Array(1))[0].toString(36).toUpperCase().padStart(3, '0');
+  return `92P-${dateStr}-${timeStr}-${random}`;
 }
 
 export function getStockStatus(current, threshold) {

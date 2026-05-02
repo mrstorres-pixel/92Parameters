@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import db from '../db/database';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
+import { PAGE_SIZE } from '../utils/durability';
 
 export default function VoidLog() {
   const [voids, setVoids] = useState([]);
   const [expanded, setExpanded] = useState(null);
+  const [page, setPage] = useState(0);
 
-  useEffect(() => { load(); }, []);
-  async function load() { setVoids((await db.voidLog.toArray()).sort((a,b) => b.datetime - a.datetime)); }
+  useEffect(() => { load(); }, [page]);
+  async function load() {
+    setVoids(await db.voidLog.query({ orderBy: 'datetime', ascending: false, limit: PAGE_SIZE, offset: page * PAGE_SIZE }));
+  }
 
   return (
     <div className="animate-fade">
@@ -59,6 +63,12 @@ export default function VoidLog() {
           </table>
         </div>
       )}
+
+      <div className="pagination">
+        <button className="btn btn-secondary btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>Previous</button>
+        <span className="text-sm text-muted">Page {page + 1}</span>
+        <button className="btn btn-secondary btn-sm" onClick={() => setPage(p => p + 1)} disabled={voids.length < PAGE_SIZE}>Next</button>
+      </div>
     </div>
   );
 }
