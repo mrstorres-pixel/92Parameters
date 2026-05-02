@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Ban, Trash2 } from 'lucide-react';
+import { Search, Ban, Trash2, Eye, Receipt, Download } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import ReceiptModal from '../components/pos/ReceiptModal';
@@ -7,11 +7,44 @@ import { useToast } from '../components/common/Toast';
 import { useAuthStore } from '../stores/authStore';
 import { formatCurrency, formatDate, formatTime, formatDateTime } from '../utils/formatters';
 import { calcItemTotal } from '../utils/calculations';
-import { PAGE_SIZE, recordIngredientMovement, reverseDailySalesSummary } from '../utils/durability';
+import { PAGE_SIZE, downloadJson, getDateRangeFilters, recordIngredientMovement, reverseDailySalesSummary } from '../utils/durability';
+
+function toDateInputValue(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getRangeBounds(range, customStart, customEnd) {
+  const now = new Date();
+  let start = new Date();
+  let end = new Date(now);
+  start.setHours(0,0,0,0);
+  end.setHours(23,59,59,999);
+
+  if (range === 'yesterday') {
+    start.setDate(start.getDate() - 1);
+    end.setDate(end.getDate() - 1);
+  } else if (range === 'week') start.setDate(start.getDate() - 7);
+  else if (range === 'month') start.setMonth(start.getMonth() - 1);
+  else if (range === 'custom') {
+    start = customStart ? new Date(`${customStart}T00:00:00`) : new Date(0);
+    end = customEnd ? new Date(`${customEnd}T23:59:59.999`) : new Date(now);
+  } else if (range === 'all') {
+    start = new Date(0);
+  }
+
+  return { start, end };
+}
 
 export default function TransactionReport() {
   const [txns, setTxns] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [search, setSearch] = useState('');
+  const [range, setRange] = useState('today');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState(toDateInputValue(new Date()));
+  const [paymentFilter, setPaymentFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [staffFilter, setStaffFilter] = useState('All');
   const [selected, setSelected] = useState(null);
   const [showReceipt, setShowReceipt] = useState(null);
   const [showVoid, setShowVoid] = useState(null);
@@ -23,9 +56,16 @@ export default function TransactionReport() {
   const isOwner = currentStaff?.role === 'owner';
   const toast = useToast();
 
-  useEffect(() => { load(); }, [page]);
+  useEffect(() => { db.staff.toArray().then(setStaff); }, []);
+  useEffect(() => { setPage(0); }, [range, customStart, customEnd, paymentFilter, statusFilter, staffFilter, search]);
+  useEffect(() => { load(); }, [page, range, customStart, customEnd, paymentFilter, statusFilter, staffFilter]);
   async function load() {
-    setTxns(await db.transactions.query({ orderBy: 'datetime', ascending: false, limit: PAGE_SIZE, offset: page * PAGE_SIZE }));
+    const { start, end } = getRangeBounds(range, customStart, customEnd);
+    const filters = getDateRangeFilters(start, end);
+    if (paymentFilter !== 'All') filters.push({ field: 'paymentMethod', op: 'eq', value: paymentFilter });
+    if (statusFilter !== 'All') filters.push({ field: 'status', op: 'eq', value: statusFilter });
+    if (staffFilter !== 'All') filters.push({ field: 'staffId', op: 'eq', value: Number(staffFilter) });
+    setTxns(await db.transactions.query({ filters, orderBy: 'datetime', ascending: false, limit: PAGE_SIZE, offset: page * PAGE_SIZE }));
   }
 
   async function restoreTransactionIngredients(txn, staff, reason) {
@@ -120,32 +160,111 @@ export default function TransactionReport() {
   const filtered = txns.filter(t => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return (t.receiptNo || '').toLowerCase().includes(q) || (t.staffName || '').toLowerCase().includes(q) || (t.paymentMethod || '').toLowerCase().includes(q);
+    return (t.receiptNo || '').toLowerCase().includes(q) ||
+      (t.staffName || '').toLowerCase().includes(q) ||
+      (t.paymentMethod || '').toLowerCase().includes(q) ||
+      (t.items || []).some(item => (item.name || '').toLowerCase().includes(q));
   });
+
+  const completed = filtered.filter(t => t.status !== 'void');
+  const voided = filtered.filter(t => t.status === 'void');
+  const totalSales = completed.reduce((sum, t) => sum + Number(t.total || 0), 0);
+  const avgTicket = completed.length ? totalSales / completed.length : 0;
+  const paymentTotals = completed.reduce((map, t) => {
+    const method = t.paymentMethod || 'Unspecified';
+    map[method] = (map[method] || 0) + Number(t.total || 0);
+    return map;
+  }, {});
+  const paymentOptions = ['All', 'Cash', 'GCash', 'Card', 'Bank Transfer', 'Grab', 'Foodpanda'];
+
+  function exportFiltered() {
+    downloadJson(`transactions-${Date.now()}.json`, {
+      exportedAt: new Date().toISOString(),
+      filters: { range, customStart, customEnd, paymentFilter, statusFilter, staffFilter, search },
+      transactions: filtered,
+    });
+  }
 
   return (
     <div className="animate-fade">
-      <div className="page-header"><h2>Transaction Report</h2></div>
+      <div className="page-header">
+        <h2>Transaction Report</h2>
+        <button className="btn btn-secondary" onClick={exportFiltered}><Download size={16} /> Export</button>
+      </div>
+
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        {[['today','Today'],['yesterday','Yesterday'],['week','7 Days'],['month','30 Days'],['custom','Custom'],['all','All Time']].map(([k,l]) => (
+          <button key={k} className={`tab ${range === k ? 'active' : ''}`} onClick={() => setRange(k)}>{l}</button>
+        ))}
+      </div>
+
+      {range === 'custom' && (
+        <div className="toolbar">
+          <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">From</label><input className="form-input" type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} /></div>
+          <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">To</label><input className="form-input" type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} /></div>
+        </div>
+      )}
+
       <div className="toolbar">
         <div className="search-bar"><Search size={16} /><input placeholder="Search receipt #, staff, payment..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+        <select className="form-select" style={{ width: 160 }} value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)}>
+          {paymentOptions.map(method => <option key={method} value={method}>{method === 'All' ? 'All Payments' : method}</option>)}
+        </select>
+        <select className="form-select" style={{ width: 150 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <option value="All">All Statuses</option>
+          <option value="completed">Completed</option>
+          <option value="void">Void</option>
+        </select>
+        <select className="form-select" style={{ width: 180 }} value={staffFilter} onChange={e => setStaffFilter(e.target.value)}>
+          <option value="All">All Staff</option>
+          {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
         <span className="text-muted text-sm">Showing {filtered.length} transaction{filtered.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      <div className="stat-grid">
+        <div className="stat-card"><div className="stat-label">Filtered Sales</div><div className="stat-value">{formatCurrency(totalSales)}</div></div>
+        <div className="stat-card"><div className="stat-label">Completed</div><div className="stat-value">{completed.length}</div></div>
+        <div className="stat-card"><div className="stat-label">Voids</div><div className="stat-value" style={{ color: 'var(--danger)' }}>{voided.length}</div></div>
+        <div className="stat-card"><div className="stat-label">Average Ticket</div><div className="stat-value">{formatCurrency(avgTicket)}</div></div>
+      </div>
+
+      <div className="card report-table-card mb-16">
+        <div className="card-title mb-16">Payment Totals</div>
+        <div className="payment-total-grid">
+          {Object.entries(paymentTotals).length === 0 ? (
+            <span className="text-muted text-sm">No completed sales in this view.</span>
+          ) : Object.entries(paymentTotals).sort((a, b) => b[1] - a[1]).map(([method, amount]) => (
+            <div key={method} className="payment-total-item">
+              <span>{method}</span>
+              <strong>{formatCurrency(amount)}</strong>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="table-container">
         <table className="data-table">
-          <thead><tr><th>Time</th><th>Receipt #</th><th>Date</th><th>Type</th><th>Items</th><th>Payment</th><th>Staff</th><th>Total</th><th>Status</th></tr></thead>
+          <thead><tr><th>Date / Time</th><th>Receipt #</th><th>Type</th><th>Items</th><th>Payment</th><th>Staff</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             {filtered.map(t => (
-              <tr key={t.id} className="clickable" onClick={() => setSelected(t)}>
-                <td>{formatTime(t.datetime)}</td>
+              <tr key={t.id}>
+                <td><div>{formatDate(t.datetime)}</div><div className="text-muted text-sm">{formatTime(t.datetime)}</div></td>
                 <td style={{ fontWeight: 600, color: 'var(--accent)' }}>{t.receiptNo}</td>
-                <td>{formatDate(t.datetime)}</td>
                 <td><span className="badge badge-neutral">{t.orderType}</span></td>
                 <td className="truncate" style={{ maxWidth: 200 }}>{(t.items||[]).map(i => `${i.name}×${i.quantity}`).join(', ')}</td>
                 <td>{t.paymentMethod}</td>
                 <td>{t.staffName || '—'}</td>
                 <td style={{ fontWeight: 600 }}>{formatCurrency(t.total)}</td>
                 <td>{t.status === 'void' ? <span className="void-stamp">VOID</span> : <span className="badge badge-success">Completed</span>}</td>
+                <td>
+                  <div className="flex gap-8">
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setSelected(t)} title="View"><Eye size={14} /></button>
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setShowReceipt(t)} title="Receipt"><Receipt size={14} /></button>
+                    {t.status !== 'void' && <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setShowVoid(t)} title="Void"><Ban size={14} /></button>}
+                    {isOwner && <button className="btn btn-ghost btn-icon btn-sm" onClick={() => deleteTransaction(t)} title="Delete"><Trash2 size={14} /></button>}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>

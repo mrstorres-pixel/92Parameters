@@ -525,6 +525,14 @@ body {
 .summary-table th { text-align: left; color: var(--text-primary); font-weight: 700; }
 .summary-table td { text-align: right; color: var(--text-secondary); font-weight: 600; }
 .compact-table th, .compact-table td { padding: 10px 14px; }
+.payment-total-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.payment-total-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-secondary); font-size: 0.85rem;
+}
+.payment-total-item span { color: var(--text-secondary); }
+.payment-total-item strong { color: var(--text-primary); }
 
 @media (max-width: 640px) {
   .dashboard-grid { grid-template-columns: 1fr; }
