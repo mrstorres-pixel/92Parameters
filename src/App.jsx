@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { useAuthStore } from './stores/authStore';
 import { ToastProvider } from './components/common/Toast';
 import { seedDatabase } from './utils/seedData';
@@ -39,7 +39,7 @@ export default function App() {
 
   return (
     <ToastProvider>
-      <BrowserRouter>
+      <HashRouter>
         <Routes>
           <Route element={<MainLayout />}>
             <Route path="/" element={<Dashboard />} />
@@ -57,7 +57,7 @@ export default function App() {
             <Route path="/maintenance" element={<Maintenance />} />
           </Route>
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </ToastProvider>
   );
 }
