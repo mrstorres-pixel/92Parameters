@@ -13,6 +13,7 @@ const TABLES = [
   ['productIngredients', db.productIngredients],
   ['productInventory', db.productInventory],
   ['transactions', db.transactions],
+  ['runningBills', db.runningBills],
   ['cashDrawer', db.cashDrawer],
   ['timeRecords', db.timeRecords],
   ['voidLog', db.voidLog],
@@ -48,6 +49,7 @@ export default function Maintenance() {
         productCount,
         ingredientCount,
         inventoryCount,
+        runningBillCount,
         transactionCount,
         auditCount,
         voidCount,
@@ -62,6 +64,7 @@ export default function Maintenance() {
         safeCount(db.products),
         safeCount(db.ingredients),
         safeCount(db.inventory),
+        safeCount(db.runningBills),
         safeCount(db.transactions),
         safeCount(db.auditLog),
         safeCount(db.voidLog),
@@ -74,7 +77,7 @@ export default function Maintenance() {
       ]);
 
       setHealth({
-        counts: { staffCount, productCount, ingredientCount, inventoryCount, transactionCount, auditCount, voidCount, summaryCount, movementCount },
+        counts: { staffCount, productCount, ingredientCount, inventoryCount, runningBillCount, transactionCount, auditCount, voidCount, summaryCount, movementCount },
         latestTxn,
         latestAudit,
         latestSummary,
@@ -117,7 +120,7 @@ export default function Maintenance() {
         <div className="stat-card"><div className="stat-label">Transactions</div><div className="stat-value">{health?.counts.transactionCount ?? '...'}</div></div>
         <div className="stat-card"><div className="stat-label">Products</div><div className="stat-value">{health?.counts.productCount ?? '...'}</div></div>
         <div className="stat-card"><div className="stat-label">Ingredients</div><div className="stat-value">{health?.counts.ingredientCount ?? '...'}</div></div>
-        <div className="stat-card"><div className="stat-label">Low Stock</div><div className="stat-value" style={{ color: health?.lowIngredients?.length ? 'var(--warning)' : 'var(--success)' }}>{health?.lowIngredients?.length ?? '...'}</div></div>
+        <div className="stat-card"><div className="stat-label">Open Bills</div><div className="stat-value">{health?.counts.runningBillCount ?? '...'}</div></div>
       </div>
 
       <div className="dashboard-grid">

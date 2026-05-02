@@ -121,6 +121,7 @@ const db = {
   productIngredients: buildTable('product_ingredients'),
   productInventory: buildTable('product_inventory'),
   transactions: buildTable('transactions'),
+  runningBills: buildTable('running_bills'),
   dailySalesSummary: buildTable('daily_sales_summary'),
   ingredientMovements: buildTable('ingredient_movements'),
   cashDrawer: buildTable('cash_drawer'),

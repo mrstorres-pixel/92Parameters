@@ -4,7 +4,7 @@ import { usePosStore } from '../../stores/posStore';
 import { formatCurrency } from '../../utils/formatters';
 import { calcItemTotal, calcCartTotal, calcItemDiscountedPrice } from '../../utils/calculations';
 
-export default function CartPanel({ onCharge }) {
+export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBill }) {
   const { cart, orderType, setOrderType, updateQuantity, removeItem, setDiscount, clearCart } = usePosStore();
   const total = calcCartTotal(cart);
   const [customDiscountItem, setCustomDiscountItem] = useState(null);
@@ -26,9 +26,10 @@ export default function CartPanel({ onCharge }) {
     <div className="pos-cart-panel">
       <div className="cart-header">
         <div className="flex-between">
-          <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>Current Order</h3>
+          <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>{activeBill ? `Table ${activeBill.tableName}` : 'Current Order'}</h3>
           {cart.length > 0 && <button className="btn btn-ghost btn-sm" onClick={clearCart}>Clear</button>}
         </div>
+        {activeBill && <div className="text-sm text-muted mt-8">Running bill opened by {activeBill.staffName || 'Staff'}</div>}
         <div className="toggle-group" style={{ marginTop: 10 }}>
           <button className={`toggle-option ${orderType === 'Dine In' ? 'active' : ''}`} onClick={() => setOrderType('Dine In')}>Dine In</button>
           <button className={`toggle-option ${orderType === 'Takeaway' ? 'active' : ''}`} onClick={() => setOrderType('Takeaway')}>Takeaway</button>
@@ -77,8 +78,14 @@ export default function CartPanel({ onCharge }) {
           <span>Total</span>
           <span>{formatCurrency(total)}</span>
         </div>
+        <div className="flex gap-8 mb-16">
+          <button className="btn btn-secondary w-full" disabled={cart.length === 0} onClick={onSaveBill}>
+            {activeBill ? 'Update Tab' : 'Save Tab'}
+          </button>
+          {activeBill && <button className="btn btn-danger" onClick={onCloseBill}>Close</button>}
+        </div>
         <button className="btn btn-primary charge-btn" disabled={cart.length === 0} onClick={() => onCharge(total)}>
-          Charge {formatCurrency(total)}
+          {activeBill ? 'Bill Out' : 'Charge'} {formatCurrency(total)}
         </button>
       </div>
     </div>

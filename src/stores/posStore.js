@@ -6,6 +6,8 @@ export const usePosStore = create((set, get) => ({
 
   setOrderType: (type) => set({ orderType: type }),
 
+  setCart: (cart, orderType = 'Dine In') => set({ cart, orderType }),
+
   addItem: (product) => {
     const cart = get().cart;
     const existing = cart.find(i => i.productId === product.id);

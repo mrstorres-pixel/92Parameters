@@ -259,6 +259,20 @@ body {
 .product-card .product-name { font-size: 0.8rem; font-weight: 600; line-height: 1.3; }
 .product-card .product-price { font-size: 0.85rem; color: var(--accent); font-weight: 700; }
 .product-card.unavailable { opacity: 0.4; pointer-events: none; }
+.running-bills {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+}
+.running-bill-list { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.running-bill {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-card); color: var(--text-primary); cursor: pointer; font-family: inherit;
+}
+.running-bill.active { border-color: var(--accent); background: var(--accent-glow); }
+.running-bill span { font-size: 0.8rem; font-weight: 700; }
+.running-bill strong { font-size: 0.78rem; color: var(--accent); }
 
 /* Cart */
 .cart-header { padding: 16px 20px; border-bottom: 1px solid var(--border); }

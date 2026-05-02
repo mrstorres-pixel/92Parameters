@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Clock } from 'lucide-react';
 import db from '../db/database';
 import { usePosStore } from '../stores/posStore';
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
-import { generateReceiptNo } from '../utils/formatters';
+import { formatCurrency, generateReceiptNo } from '../utils/formatters';
 import { calcCartTotal, calcItemTotal } from '../utils/calculations';
 import { recordIngredientMovement, updateDailySalesSummary } from '../utils/durability';
+import { closeRunningBill, deleteRunningBill, loadOpenBills, saveRunningBill } from '../utils/runningBills';
 import ProductGrid from '../components/pos/ProductGrid';
 import CartPanel from '../components/pos/CartPanel';
 import PaymentModal from '../components/pos/PaymentModal';
@@ -20,11 +21,51 @@ export default function PointOfSale() {
   const [search, setSearch] = useState('');
   const [showPayment, setShowPayment] = useState(false);
   const [receipt, setReceipt] = useState(null);
-  const { cart, orderType, addItem, clearCart } = usePosStore();
+  const [runningBills, setRunningBills] = useState([]);
+  const [activeBill, setActiveBill] = useState(null);
+  const { cart, orderType, addItem, clearCart, setCart } = usePosStore();
   const currentStaff = useAuthStore(s => s.currentStaff);
   const toast = useToast();
 
-  useEffect(() => { db.products.toArray().then(setProducts); }, []);
+  useEffect(() => { db.products.toArray().then(setProducts); refreshBills(); }, []);
+
+  async function refreshBills() {
+    setRunningBills(await loadOpenBills());
+  }
+
+  async function saveBill() {
+    if (cart.length === 0) return;
+    const tableName = activeBill?.tableName || window.prompt('Table name / number?');
+    if (!tableName) return;
+    const id = await saveRunningBill({
+      billId: activeBill?.id,
+      tableName,
+      items: cart.map(i => ({ ...i })),
+      orderType,
+      total: calcCartTotal(cart),
+      staff: currentStaff,
+    });
+    setActiveBill({ ...(activeBill || {}), id, tableName, items: cart.map(i => ({ ...i })), orderType, total: calcCartTotal(cart), staffName: currentStaff?.name });
+    await refreshBills();
+    toast(activeBill ? 'Running bill updated' : 'Running bill saved', 'success');
+    clearCart();
+    setActiveBill(null);
+  }
+
+  function loadBill(bill) {
+    setActiveBill(bill);
+    setCart(bill.items || [], bill.orderType || 'Dine In');
+  }
+
+  async function closeBill() {
+    if (!activeBill) return;
+    if (!window.confirm(`Close running bill for ${activeBill.tableName}? This will discard the open tab without charging.`)) return;
+    await deleteRunningBill(activeBill.id);
+    clearCart();
+    setActiveBill(null);
+    await refreshBills();
+    toast('Running bill closed', 'info');
+  }
 
   async function handlePayment(method, cashReceived) {
     try {
@@ -39,6 +80,7 @@ export default function PointOfSale() {
       const transactionId = await db.transactions.add(txn);
       const savedTxn = { ...txn, id: transactionId };
       const summaryUpdated = await updateDailySalesSummary(savedTxn);
+      if (activeBill) await closeRunningBill(activeBill.id, transactionId);
 
       // Deduct ingredients
       for (const item of cart) {
@@ -97,6 +139,8 @@ export default function PointOfSale() {
       setReceipt(savedTxn);
       setShowPayment(false);
       clearCart();
+      setActiveBill(null);
+      refreshBills();
       toast(summaryUpdated ? 'Transaction completed!' : 'Transaction completed, but summary update failed. Check Maintenance.', summaryUpdated ? 'success' : 'error');
     } catch (error) {
       console.error('Payment failed:', error);
@@ -108,6 +152,20 @@ export default function PointOfSale() {
     <div className="pos-layout">
       <div className="pos-menu">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+          {runningBills.length > 0 && (
+            <div className="running-bills">
+              <div className="text-sm text-muted" style={{ fontWeight: 700, textTransform: 'uppercase' }}>Running Bills</div>
+              <div className="running-bill-list">
+                {runningBills.map(bill => (
+                  <button key={bill.id} className={`running-bill ${activeBill?.id === bill.id ? 'active' : ''}`} onClick={() => loadBill(bill)}>
+                    <Clock size={14} />
+                    <span>Table {bill.tableName}</span>
+                    <strong>{formatCurrency(bill.total || 0)}</strong>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <div className="tabs" style={{ marginBottom: 0 }}>
               {['All', ...Object.keys(CATEGORIES)].map(c => (
@@ -137,7 +195,7 @@ export default function PointOfSale() {
         </div>
         <ProductGrid products={products} category={category} subCategory={subCategory} searchQuery={search} onAdd={addItem} />
       </div>
-      <CartPanel onCharge={() => setShowPayment(true)} />
+      <CartPanel onCharge={() => setShowPayment(true)} activeBill={activeBill} onSaveBill={saveBill} onCloseBill={closeBill} />
       {showPayment && <PaymentModal total={calcCartTotal(cart)} onConfirm={handlePayment} onClose={() => setShowPayment(false)} />}
       {receipt && <ReceiptModal transaction={receipt} onClose={() => setReceipt(null)} />}
     </div>
