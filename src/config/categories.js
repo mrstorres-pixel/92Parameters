@@ -13,6 +13,9 @@ export const CATEGORIES = {
     'Sandwich and Burger', 
     'Pizza and Quesadilla', 
     'Dessert'
+  ],
+  'Takeout Box': [
+    'Takeout Box'
   ]
 };
 
