@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, AlertTriangle, History } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, AlertTriangle, History, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useAuthStore } from '../stores/authStore';
@@ -16,6 +16,7 @@ export default function Ingredients() {
   const [editing, setEditing] = useState(null);
   const [historyItem, setHistoryItem] = useState(null);
   const [historyLogs, setHistoryLogs] = useState([]);
+  const [sortBy, setSortBy] = useState({ field: 'name', direction: 'asc' });
   const [form, setForm] = useState(empty);
   const { currentStaff } = useAuthStore();
   const toast = useToast();
@@ -72,7 +73,32 @@ export default function Ingredients() {
     toast('Ingredient deleted', 'info'); load();
   }
 
-  const filtered = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
+  function toggleSort(field) {
+    setSortBy(current => ({
+      field,
+      direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  }
+
+  function SortIcon({ field }) {
+    if (sortBy.field !== field) return <ArrowUpDown size={13} />;
+    return sortBy.direction === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />;
+  }
+
+  const filtered = [...items]
+    .filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      const direction = sortBy.direction === 'asc' ? 1 : -1;
+      const getValue = (item) => {
+        if (sortBy.field === 'stockValue') return calcStockValue(item.inStock, item.unitCost);
+        if (sortBy.field === 'status') return getStockStatusLabel(item.inStock, item.lowThreshold || 0);
+        return item[sortBy.field] ?? '';
+      };
+      const av = getValue(a);
+      const bv = getValue(b);
+      if (typeof av === 'number' || typeof bv === 'number') return (Number(av || 0) - Number(bv || 0)) * direction;
+      return String(av).localeCompare(String(bv)) * direction;
+    });
   const lowItems = items.filter(i => i.inStock <= (i.lowThreshold || 0));
 
   return (
@@ -95,7 +121,16 @@ export default function Ingredients() {
 
       <div className="table-container">
         <table className="data-table">
-          <thead><tr><th>Name</th><th>Unit</th><th>In Stock</th><th>Status</th><th>Unit Cost</th><th>Stock Value</th><th>Threshold</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th><button className={`table-sort ${sortBy.field === 'name' ? 'active' : ''}`} onClick={() => toggleSort('name')}>Name <SortIcon field="name" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'unit' ? 'active' : ''}`} onClick={() => toggleSort('unit')}>Unit <SortIcon field="unit" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'inStock' ? 'active' : ''}`} onClick={() => toggleSort('inStock')}>In Stock <SortIcon field="inStock" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'status' ? 'active' : ''}`} onClick={() => toggleSort('status')}>Status <SortIcon field="status" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'unitCost' ? 'active' : ''}`} onClick={() => toggleSort('unitCost')}>Unit Cost <SortIcon field="unitCost" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'stockValue' ? 'active' : ''}`} onClick={() => toggleSort('stockValue')}>Stock Value <SortIcon field="stockValue" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'lowThreshold' ? 'active' : ''}`} onClick={() => toggleSort('lowThreshold')}>Threshold <SortIcon field="lowThreshold" /></button></th>
+            <th>Actions</th>
+          </tr></thead>
           <tbody>
             {filtered.map(item => {
               const status = getStockStatus(item.inStock, item.lowThreshold || 0);

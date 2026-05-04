@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useAuthStore } from '../stores/authStore';
@@ -14,6 +14,7 @@ export default function Inventory() {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
+  const [sortBy, setSortBy] = useState({ field: 'name', direction: 'asc' });
   const { currentStaff } = useAuthStore();
   const toast = useToast();
 
@@ -52,7 +53,28 @@ export default function Inventory() {
     toast('Item deleted', 'info'); load();
   }
 
-  const filtered = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
+  function toggleSort(field) {
+    setSortBy(current => ({
+      field,
+      direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  }
+
+  function SortIcon({ field }) {
+    if (sortBy.field !== field) return <ArrowUpDown size={13} />;
+    return sortBy.direction === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />;
+  }
+
+  const filtered = [...items]
+    .filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      const direction = sortBy.direction === 'asc' ? 1 : -1;
+      const getValue = (item) => sortBy.field === 'stockValue' ? calcStockValue(item.inStock, item.cost) : item[sortBy.field] ?? '';
+      const av = getValue(a);
+      const bv = getValue(b);
+      if (typeof av === 'number' || typeof bv === 'number') return (Number(av || 0) - Number(bv || 0)) * direction;
+      return String(av).localeCompare(String(bv)) * direction;
+    });
   const totalValue = filtered.reduce((s, i) => s + calcStockValue(i.inStock, i.cost), 0);
 
   return (
@@ -73,7 +95,15 @@ export default function Inventory() {
 
       <div className="table-container">
         <table className="data-table">
-          <thead><tr><th>Name</th><th>Category</th><th>In Stock</th><th>Price</th><th>Cost</th><th>Stock Value</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th><button className={`table-sort ${sortBy.field === 'name' ? 'active' : ''}`} onClick={() => toggleSort('name')}>Name <SortIcon field="name" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'category' ? 'active' : ''}`} onClick={() => toggleSort('category')}>Category <SortIcon field="category" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'inStock' ? 'active' : ''}`} onClick={() => toggleSort('inStock')}>In Stock <SortIcon field="inStock" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'price' ? 'active' : ''}`} onClick={() => toggleSort('price')}>Price <SortIcon field="price" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'cost' ? 'active' : ''}`} onClick={() => toggleSort('cost')}>Cost <SortIcon field="cost" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'stockValue' ? 'active' : ''}`} onClick={() => toggleSort('stockValue')}>Stock Value <SortIcon field="stockValue" /></button></th>
+            <th>Actions</th>
+          </tr></thead>
           <tbody>
             {filtered.map(item => {
               const sv = calcStockValue(item.inStock, item.cost);
