@@ -16,7 +16,7 @@ export default function ProductManagement() {
   const [editing, setEditing] = useState(null);
   const [recipeProduct, setRecipeProduct] = useState(null);
   const [form, setForm] = useState(empty);
-  const [sortBy, setSortBy] = useState('name-asc');
+  const [sortBy, setSortBy] = useState({ field: 'name', direction: 'asc' });
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [subCategoryFilter, setSubCategoryFilter] = useState('All');
   const { currentStaff } = useAuthStore();
@@ -52,26 +52,27 @@ export default function ProductManagement() {
   const allSubCategories = Array.from(new Set(Object.values(CATEGORIES).flat())).sort((a, b) => a.localeCompare(b));
 
   function toggleSort(field) {
-    setSortBy(current => {
-      if (field === 'name') return current === 'name-asc' ? 'name-desc' : 'name-asc';
-      if (field === 'price') return current === 'price-asc' ? 'price-desc' : 'price-asc';
-      return current;
-    });
+    setSortBy(current => ({
+      field,
+      direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc',
+    }));
   }
 
   function SortIcon({ field }) {
-    const active = sortBy.startsWith(field);
-    if (!active) return <ArrowUpDown size={13} />;
-    return sortBy.endsWith('asc') ? <ArrowUp size={13} /> : <ArrowDown size={13} />;
+    if (sortBy.field !== field) return <ArrowUpDown size={13} />;
+    return sortBy.direction === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />;
   }
 
   const sorted = [...products].sort((a, b) => {
-    if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
-    if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
-    if (sortBy === 'price-asc') return a.price - b.price;
-    if (sortBy === 'price-desc') return b.price - a.price;
-    if (sortBy === 'category') return a.category.localeCompare(b.category);
-    return 0;
+    const direction = sortBy.direction === 'asc' ? 1 : -1;
+    const getValue = (product) => {
+      if (sortBy.field === 'status') return product.isAvailable ? 'Available' : 'Unavailable';
+      return product[sortBy.field] ?? '';
+    };
+    const av = getValue(a);
+    const bv = getValue(b);
+    if (typeof av === 'number' || typeof bv === 'number') return (Number(av || 0) - Number(bv || 0)) * direction;
+    return String(av).localeCompare(String(bv)) * direction;
   });
 
   const filtered = sorted.filter(p => {
@@ -105,10 +106,13 @@ export default function ProductManagement() {
       <div className="table-container">
         <table className="data-table">
           <thead><tr>
-            <th><button className={`table-sort ${sortBy.startsWith('name') ? 'active' : ''}`} onClick={() => toggleSort('name')}>Name <SortIcon field="name" /></button></th>
-            <th>Category</th><th>Sub-Category</th>
-            <th><button className={`table-sort ${sortBy.startsWith('price') ? 'active' : ''}`} onClick={() => toggleSort('price')}>Price <SortIcon field="price" /></button></th>
-            <th>Cost</th><th>Status</th><th>Actions</th>
+            <th><button className={`table-sort ${sortBy.field === 'name' ? 'active' : ''}`} onClick={() => toggleSort('name')}>Name <SortIcon field="name" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'category' ? 'active' : ''}`} onClick={() => toggleSort('category')}>Category <SortIcon field="category" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'subCategory' ? 'active' : ''}`} onClick={() => toggleSort('subCategory')}>Sub-Category <SortIcon field="subCategory" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'price' ? 'active' : ''}`} onClick={() => toggleSort('price')}>Price <SortIcon field="price" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'cost' ? 'active' : ''}`} onClick={() => toggleSort('cost')}>Cost <SortIcon field="cost" /></button></th>
+            <th><button className={`table-sort ${sortBy.field === 'status' ? 'active' : ''}`} onClick={() => toggleSort('status')}>Status <SortIcon field="status" /></button></th>
+            <th>Actions</th>
           </tr></thead>
           <tbody>
             {filtered.map(p => (

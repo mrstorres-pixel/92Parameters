@@ -1,6 +1,7 @@
 export const CATEGORIES = {
   'Drinks': [
     'Coffee',
+    'Non coffee',
     'Frappe', 
     'Fruit-Blended', 
     'Refreshing Beverage', 
