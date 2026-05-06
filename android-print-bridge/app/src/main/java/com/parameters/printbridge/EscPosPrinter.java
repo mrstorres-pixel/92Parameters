@@ -29,6 +29,9 @@ public class EscPosPrinter {
         if (Build.VERSION.SDK_INT >= 31 && context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
             throw new Exception("Bluetooth permission was not granted.");
         }
+        if (Build.VERSION.SDK_INT >= 31 && context.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+            throw new Exception("Bluetooth scan permission was not granted.");
+        }
 
         BluetoothDevice device = adapter.getRemoteDevice(macAddress);
         BluetoothSocket socket = device.createRfcommSocketToServiceRecord(SPP_UUID);

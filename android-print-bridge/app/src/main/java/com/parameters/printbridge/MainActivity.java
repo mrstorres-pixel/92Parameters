@@ -55,7 +55,8 @@ public class MainActivity extends Activity {
     private void buildUi() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(28, 28, 28, 28);
+        int topPadding = Build.VERSION.SDK_INT >= 23 ? getStatusBarHeight() + 28 : 28;
+        root.setPadding(28, topPadding, 28, 28);
 
         TextView title = new TextView(this);
         title.setText("92 Print Bridge");
@@ -100,13 +101,18 @@ public class MainActivity extends Activity {
     }
 
     private void requestBluetoothPermission() {
-        if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 92);
+        if (Build.VERSION.SDK_INT >= 31 && (
+            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED
+        )) {
+            requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN}, 92);
         }
     }
 
     private boolean hasBluetoothPermission() {
-        return Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
+        return Build.VERSION.SDK_INT < 31 ||
+            (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
+             checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED);
     }
 
     private void loadPairedPrinters() {
@@ -228,5 +234,10 @@ public class MainActivity extends Activity {
 
     private void setStatus(String message) {
         statusView.setText(message);
+    }
+
+    private int getStatusBarHeight() {
+        int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        return resourceId > 0 ? getResources().getDimensionPixelSize(resourceId) : 0;
     }
 }
