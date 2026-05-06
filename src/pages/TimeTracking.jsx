@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, Clock } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Camera } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useToast } from '../components/common/Toast';
@@ -13,6 +13,9 @@ export default function TimeTracking() {
   const [stream, setStream] = useState(null);
   const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0,10));
   const [viewPhoto, setViewPhoto] = useState(null);
+  const [pinPrompt, setPinPrompt] = useState(null);
+  const [pinValue, setPinValue] = useState('');
+  const [pinError, setPinError] = useState('');
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const currentStaff = useAuthStore(s => s.currentStaff);
@@ -33,13 +36,38 @@ export default function TimeTracking() {
     return `${hrs}h ${mins}m`;
   }
 
-  async function startCapture(staffId, type) {
+  function startCapture(staffId, type) {
+    setPinPrompt({ staffId, type });
+    setPinValue('');
+    setPinError('');
+  }
+
+  async function beginCapture(staffId, type) {
     setCapturing({ staffId, type });
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 320, height: 240 } });
       setStream(s);
       setTimeout(() => { if (videoRef.current) videoRef.current.srcObject = s; }, 100);
     } catch { toast('Camera access denied', 'error'); setCapturing(null); }
+  }
+
+  async function confirmPin() {
+    if (!pinPrompt) return;
+    const selected = staff.find(s => s.id === pinPrompt.staffId);
+    if (!selected?.pin) {
+      setPinError('This profile needs a PIN before time tracking.');
+      return;
+    }
+    if (pinValue !== selected.pin) {
+      setPinError('Invalid PIN');
+      setPinValue('');
+      return;
+    }
+    const nextCapture = pinPrompt;
+    setPinPrompt(null);
+    setPinValue('');
+    setPinError('');
+    await beginCapture(nextCapture.staffId, nextCapture.type);
   }
 
   function stopCapture() {
@@ -145,6 +173,36 @@ export default function TimeTracking() {
             </table>
           </div>
         </>
+      )}
+
+      {pinPrompt && (
+        <Modal title={`Confirm PIN â€” ${getStaffName(pinPrompt.staffId)}`} onClose={() => setPinPrompt(null)} footer={
+          <>
+            <button className="btn btn-secondary" onClick={() => setPinPrompt(null)}>Cancel</button>
+            <button className="btn btn-primary" onClick={confirmPin} disabled={pinValue.length !== 4}>Continue</button>
+          </>
+        }>
+          <div className="form-group">
+            <label className="form-label">Employee PIN</label>
+            <input
+              className="form-input"
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              value={pinValue}
+              onChange={e => {
+                setPinValue(e.target.value.replace(/\D/g, ''));
+                setPinError('');
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && pinValue.length === 4) confirmPin();
+              }}
+              placeholder="Enter 4-digit PIN"
+              autoFocus
+            />
+          </div>
+          {pinError && <p style={{ color: 'var(--danger)', fontSize: '0.85rem' }}>{pinError}</p>}
+        </Modal>
       )}
 
       {capturing && (
