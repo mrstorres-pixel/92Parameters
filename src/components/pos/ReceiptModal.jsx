@@ -13,42 +13,11 @@ export default function ReceiptModal({ transaction, onClose }) {
 
   function handlePrint() {
     const win = window.open('', '_blank', 'width=260,height=700');
-    win.document.write('<html><head><title>Receipt</title><style>@page{size:58mm auto;margin:0}*{box-sizing:border-box}html,body{width:58mm;margin:0;padding:0;background:#fff}body{font-family:"Courier New",monospace;font-size:11px;line-height:1.25;color:#000}.receipt{width:58mm!important;max-width:58mm!important;margin:0!important;padding:3mm!important;color:#000!important;background:#fff!important;font-family:"Courier New",monospace!important;font-size:11px!important}.receipt img{max-width:22mm!important}.receipt-line{display:flex!important;justify-content:space-between!important;gap:3mm!important}.receipt-line span:first-child{min-width:0;overflow-wrap:anywhere}.receipt-divider{border-top:1px dashed #000!important;margin:2mm 0!important}@media print{html,body{width:58mm!important}.receipt{width:58mm!important;page-break-inside:avoid}button{display:none!important}}</style></head><body>');
+    win.document.write('<html><head><title>Receipt</title><style>@page{size:58mm auto;margin:0}*{box-sizing:border-box}html,body{width:58mm;margin:0;padding:0;background:#fff}body{font-family:"Courier New",monospace;font-size:13px;line-height:1.3;color:#000}.receipt{width:58mm!important;max-width:58mm!important;margin:0!important;padding:3mm!important;color:#000!important;background:#fff!important;font-family:"Courier New",monospace!important;font-size:13px!important}.receipt img{max-width:24mm!important}.receipt-line{display:flex!important;justify-content:space-between!important;gap:3mm!important}.receipt-line span:first-child{min-width:0;overflow-wrap:anywhere}.receipt-divider{border-top:1px dashed #000!important;margin:2mm 0!important}@media print{html,body{width:58mm!important}.receipt{width:58mm!important;page-break-inside:avoid}button{display:none!important}}</style></head><body>');
     win.document.write(ref.current.innerHTML);
     win.document.write('</body></html>');
     win.document.close();
     win.print();
-  }
-
-  function buildBridgePayload() {
-    return {
-      receiptNo: t.receiptNo,
-      businessName: '92 PARAMETERS CAFE',
-      datetime: t.datetime,
-      datetimeText: formatDateTime(t.datetime),
-      orderType: t.orderType,
-      paymentMethod: t.paymentMethod,
-      staffName: t.staffName || 'Staff',
-      items: (t.items || []).map(item => ({
-        name: item.name,
-        quantity: item.quantity,
-        lineTotal: calcItemTotal(item),
-        discount: Number(item.discount || 0),
-        discountAmount: Number(item.discountAmount || 0),
-      })),
-      subtotal: Number(t.subtotal || 0),
-      orderDiscount: Number(t.orderDiscount || 0),
-      orderDiscountAmount: Number(t.orderDiscountAmount || 0),
-      total: Number(t.total || 0),
-      cashReceived: Number(t.cashReceived || 0),
-      change: Number(t.cashReceived || 0) > 0 ? Number(t.cashReceived || 0) - Number(t.total || 0) : 0,
-      footer: 'THANK YOU! SEE US AGAIN! :)',
-    };
-  }
-
-  function handleBluetoothPrint() {
-    const payload = encodeURIComponent(JSON.stringify(buildBridgePayload()));
-    window.location.href = `parametersprint://print?payload=${payload}`;
   }
 
   function buildReceiptRows() {
@@ -119,7 +88,7 @@ export default function ReceiptModal({ transaction, onClose }) {
   async function handleSaveImage() {
     const width = 384;
     const padding = 18;
-    const lineHeight = 20;
+    const lineHeight = 24;
     const logo = await loadImage('/logo.png?v=2');
     const logoWidth = logo ? 84 : 0;
     const logoHeight = logo ? Math.round((logo.height / logo.width) * logoWidth) : 0;
@@ -127,7 +96,7 @@ export default function ReceiptModal({ transaction, onClose }) {
     const rows = buildReceiptRows();
     const measureCanvas = document.createElement('canvas');
     const measureCtx = measureCanvas.getContext('2d');
-    measureCtx.font = '14px "Courier New", monospace';
+    measureCtx.font = '17px "Courier New", monospace';
     const rowHeights = rows.map(row => {
       if (row.type === 'space') return 10;
       if (row.type === 'divider') return 18;
@@ -150,7 +119,7 @@ export default function ReceiptModal({ transaction, onClose }) {
       y += logoBlockHeight;
     }
     rows.forEach((row, index) => {
-      ctx.font = `${row.bold ? '700 ' : ''}14px "Courier New", monospace`;
+      ctx.font = `${row.bold ? '700 ' : ''}17px "Courier New", monospace`;
       if (row.type === 'space') {
         y += rowHeights[index];
         return;
@@ -202,7 +171,6 @@ export default function ReceiptModal({ transaction, onClose }) {
     <Modal title="Receipt" onClose={onClose} footer={
       <>
         <button className="btn btn-secondary" onClick={onClose}>Close</button>
-        <button className="btn btn-secondary" onClick={handleBluetoothPrint}>Bluetooth Print</button>
         <button className="btn btn-secondary" onClick={handleSaveImage}>Save Image</button>
         <button className="btn btn-primary" onClick={handlePrint}>Print Receipt</button>
       </>
