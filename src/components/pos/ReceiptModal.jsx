@@ -20,6 +20,37 @@ export default function ReceiptModal({ transaction, onClose }) {
     win.print();
   }
 
+  function buildBridgePayload() {
+    return {
+      receiptNo: t.receiptNo,
+      businessName: '92 PARAMETERS CAFE',
+      datetime: t.datetime,
+      datetimeText: formatDateTime(t.datetime),
+      orderType: t.orderType,
+      paymentMethod: t.paymentMethod,
+      staffName: t.staffName || 'Staff',
+      items: (t.items || []).map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        lineTotal: calcItemTotal(item),
+        discount: Number(item.discount || 0),
+        discountAmount: Number(item.discountAmount || 0),
+      })),
+      subtotal: Number(t.subtotal || 0),
+      orderDiscount: Number(t.orderDiscount || 0),
+      orderDiscountAmount: Number(t.orderDiscountAmount || 0),
+      total: Number(t.total || 0),
+      cashReceived: Number(t.cashReceived || 0),
+      change: Number(t.cashReceived || 0) > 0 ? Number(t.cashReceived || 0) - Number(t.total || 0) : 0,
+      footer: 'THANK YOU! SEE US AGAIN! :)',
+    };
+  }
+
+  function handleBluetoothPrint() {
+    const payload = encodeURIComponent(JSON.stringify(buildBridgePayload()));
+    window.location.href = `parametersprint://print?payload=${payload}`;
+  }
+
   function buildReceiptRows() {
     const rows = [
       { type: 'center', text: '92 PARAMETERS CAFE', bold: true },
@@ -171,6 +202,7 @@ export default function ReceiptModal({ transaction, onClose }) {
     <Modal title="Receipt" onClose={onClose} footer={
       <>
         <button className="btn btn-secondary" onClick={onClose}>Close</button>
+        <button className="btn btn-secondary" onClick={handleBluetoothPrint}>Bluetooth Print</button>
         <button className="btn btn-secondary" onClick={handleSaveImage}>Save Image</button>
         <button className="btn btn-primary" onClick={handlePrint}>Print Receipt</button>
       </>
