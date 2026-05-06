@@ -23,12 +23,14 @@ export async function loadOpenBills() {
   }
 }
 
-export async function saveRunningBill({ billId, tableName, items, orderType, total, staff }) {
+export async function saveRunningBill({ billId, tableName, items, orderType, orderDiscount, orderMarkup, total, staff }) {
   const now = Date.now();
   const data = {
     tableName,
     items,
     orderType,
+    orderDiscount,
+    orderMarkup,
     total,
     status: 'open',
     staffId: staff?.id,

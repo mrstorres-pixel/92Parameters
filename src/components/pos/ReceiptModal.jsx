@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import Modal from '../common/Modal';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
-import { calcItemTotal, calcItemDiscountedPrice } from '../../utils/calculations';
+import { calcItemTotal } from '../../utils/calculations';
 
 export default function ReceiptModal({ transaction, onClose }) {
   const ref = useRef();
@@ -54,6 +54,29 @@ export default function ReceiptModal({ transaction, onClose }) {
         ))}
 
         <div className="receipt-divider" style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
+
+        {(t.orderDiscount > 0 || t.orderMarkup > 0) && (
+          <div style={{ marginBottom: '8px' }}>
+            {t.subtotal && (
+              <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Subtotal</span>
+                <span>{formatCurrency(t.subtotal)}</span>
+              </div>
+            )}
+            {t.orderDiscount > 0 && (
+              <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Order Discount</span>
+                <span>-{t.orderDiscount}%</span>
+              </div>
+            )}
+            {t.orderMarkup > 0 && (
+              <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Order Markup</span>
+                <span>+{t.orderMarkup}%</span>
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ textAlign: 'right', marginBottom: '15px' }}>
           <div className="receipt-line" style={{ display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>

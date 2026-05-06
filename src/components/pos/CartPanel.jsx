@@ -2,13 +2,16 @@ import React, { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { usePosStore } from '../../stores/posStore';
 import { formatCurrency } from '../../utils/formatters';
-import { calcItemTotal, calcCartTotal, calcItemDiscountedPrice } from '../../utils/calculations';
+import { calcItemTotal, calcCartTotal, calcCartSubtotal, calcItemAdjustedPrice } from '../../utils/calculations';
 
 export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBill }) {
-  const { cart, orderType, setOrderType, updateQuantity, removeItem, setDiscount, clearCart } = usePosStore();
-  const total = calcCartTotal(cart);
+  const { cart, orderType, orderDiscount, orderMarkup, setOrderType, setOrderDiscount, setOrderMarkup, updateQuantity, removeItem, setDiscount, setMarkup, clearCart } = usePosStore();
+  const subtotal = calcCartSubtotal(cart);
+  const total = calcCartTotal(cart, orderDiscount, orderMarkup);
   const [customDiscountItem, setCustomDiscountItem] = useState(null);
+  const [customMarkupItem, setCustomMarkupItem] = useState(null);
   const [customVal, setCustomVal] = useState('');
+  const [customMarkupVal, setCustomMarkupVal] = useState('');
 
   function applyPreset(productId, pct) {
     const item = cart.find(i => i.productId === productId);
@@ -20,6 +23,18 @@ export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBil
   function applyCustom() {
     if (customDiscountItem && customVal) { setDiscount(customDiscountItem, Number(customVal)); }
     setCustomDiscountItem(null);
+  }
+
+  function applyMarkupPreset(productId, pct) {
+    const item = cart.find(i => i.productId === productId);
+    if (item && item.markup === pct) { setMarkup(productId, 0); }
+    else { setMarkup(productId, pct); }
+  }
+
+  function openMarkupCustom(productId) { setCustomMarkupItem(productId); setCustomMarkupVal(''); }
+  function applyMarkupCustom() {
+    if (customMarkupItem && customMarkupVal) { setMarkup(customMarkupItem, Number(customMarkupVal)); }
+    setCustomMarkupItem(null);
   }
 
   return (
@@ -46,8 +61,9 @@ export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBil
                 <div className="cart-item-name">{item.name}</div>
                 <div className="cart-item-price">
                   {item.discount > 0 && <span className="original">{formatCurrency(item.price)}</span>}
-                  {formatCurrency(calcItemDiscountedPrice(item.price, item.discount))}
+                  {formatCurrency(calcItemAdjustedPrice(item.price, item.discount, item.markup))}
                   {item.discount > 0 && <span style={{ color: 'var(--success)', marginLeft: 4, fontSize: '0.7rem' }}>-{item.discount}%</span>}
+                  {item.markup > 0 && <span style={{ color: 'var(--warning)', marginLeft: 4, fontSize: '0.7rem' }}>+{item.markup}%</span>}
                 </div>
               </div>
               <div className="cart-item-qty">
@@ -59,6 +75,7 @@ export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBil
               <div className="cart-item-remove" onClick={() => removeItem(item.productId)}><Trash2 size={14} /></div>
             </div>
             <div className="discount-row">
+              <span className="adjust-label">Discount</span>
               <button className={`discount-btn ${item.discount === 10 ? 'active' : ''}`} onClick={() => applyPreset(item.productId, 10)}>10%</button>
               <button className={`discount-btn ${item.discount === 20 ? 'active' : ''}`} onClick={() => applyPreset(item.productId, 20)}>20%</button>
               <button className={`discount-btn ${item.discount > 0 && item.discount !== 10 && item.discount !== 20 ? 'active' : ''}`} onClick={() => openCustom(item.productId)}>Custom</button>
@@ -69,11 +86,37 @@ export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBil
                 <button className="btn btn-primary btn-sm" onClick={applyCustom} style={{ padding: '4px 10px' }}>Apply</button>
               </div>
             )}
+            <div className="discount-row">
+              <span className="adjust-label">Markup</span>
+              <button className={`discount-btn ${item.markup === 10 ? 'active' : ''}`} onClick={() => applyMarkupPreset(item.productId, 10)}>10%</button>
+              <button className={`discount-btn ${item.markup === 20 ? 'active' : ''}`} onClick={() => applyMarkupPreset(item.productId, 20)}>20%</button>
+              <button className={`discount-btn ${item.markup > 0 && item.markup !== 10 && item.markup !== 20 ? 'active' : ''}`} onClick={() => openMarkupCustom(item.productId)}>Custom</button>
+            </div>
+            {customMarkupItem === item.productId && (
+              <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                <input className="form-input" style={{ padding: '4px 8px', fontSize: '0.75rem', width: 70 }} type="number" placeholder="%" value={customMarkupVal} onChange={e => setCustomMarkupVal(e.target.value)} min="0" />
+                <button className="btn btn-primary btn-sm" onClick={applyMarkupCustom} style={{ padding: '4px 10px' }}>Apply</button>
+              </div>
+            )}
           </div>
         ))}
       </div>
 
       <div className="cart-footer">
+        <div className="cart-total" style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+          <span>Subtotal</span>
+          <span>{formatCurrency(subtotal)}</span>
+        </div>
+        <div className="order-adjustments">
+          <div className="form-group">
+            <label className="form-label">Order Discount %</label>
+            <input className="form-input" type="number" min="0" max="100" value={orderDiscount || ''} onChange={e => setOrderDiscount(e.target.value)} placeholder="0" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Order Markup %</label>
+            <input className="form-input" type="number" min="0" value={orderMarkup || ''} onChange={e => setOrderMarkup(e.target.value)} placeholder="0" />
+          </div>
+        </div>
         <div className="cart-total">
           <span>Total</span>
           <span>{formatCurrency(total)}</span>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from 'recharts';
 import db from '../db/database';
 import { formatCurrency } from '../utils/formatters';
-import { calcGrossProfit } from '../utils/calculations';
+import { calcGrossProfit, calcItemTotal } from '../utils/calculations';
 import { getDateRangeFilters } from '../utils/durability';
 
 const COLORS = ['#d4982a', '#f59e0b', '#34d399', '#60a5fa', '#a78bfa', '#f87171'];
@@ -73,7 +73,7 @@ export default function BusinessReport() {
   const catMap = {};
   valid.forEach(t => (t.items||[]).forEach(i => {
     const cat = i.category || 'Other';
-    catMap[cat] = (catMap[cat] || 0) + (i.price * (1 - (i.discount||0)/100) * i.quantity);
+    catMap[cat] = (catMap[cat] || 0) + calcItemTotal(i);
   }));
   const catQtyMap = {};
   const catCostMap = {};

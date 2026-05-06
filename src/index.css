@@ -293,10 +293,14 @@ body {
 .cart-item-remove { color: var(--text-muted); cursor: pointer; padding: 4px; }
 .cart-item-remove:hover { color: var(--danger); }
 .discount-row { display: flex; gap: 4px; margin-top: 4px; }
+.adjust-label { min-width: 54px; color: var(--text-muted); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; align-self: center; }
 .discount-btn { padding: 2px 8px; font-size: 0.65rem; border-radius: 4px; border: 1px solid var(--border); background: none; color: var(--text-secondary); cursor: pointer; font-family: inherit; transition: var(--transition); }
 .discount-btn:hover { border-color: var(--accent); color: var(--accent); }
 .discount-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
 .cart-footer { padding: 16px 20px; border-top: 1px solid var(--border); }
+.order-adjustments { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.order-adjustments .form-group { margin-bottom: 0; }
+.order-adjustments .form-input { padding: 8px 10px; }
 .cart-total { display: flex; justify-content: space-between; font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
 .charge-btn { width: 100%; padding: 12px; font-size: 1rem; }
 

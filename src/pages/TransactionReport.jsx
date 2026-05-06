@@ -302,17 +302,30 @@ export default function TransactionReport() {
           <h4 style={{ fontSize: '0.9rem', marginBottom: 8, color: 'var(--text-secondary)' }}>Items</h4>
           <div className="table-container" style={{ marginBottom: 16 }}>
             <table className="data-table">
-              <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Discount</th><th>Subtotal</th></tr></thead>
+              <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Discount</th><th>Markup</th><th>Subtotal</th></tr></thead>
               <tbody>
                 {(selected.items || []).map((item, i) => (
                   <tr key={i}>
                     <td>{item.name}</td><td>{item.quantity}</td><td>{formatCurrency(item.price)}</td>
-                    <td>{item.discount > 0 ? `${item.discount}%` : '—'}</td><td style={{ fontWeight: 600 }}>{formatCurrency(calcItemTotal(item))}</td>
+                    <td>{item.discount > 0 ? `${item.discount}%` : '—'}</td>
+                    <td>{item.markup > 0 ? `${item.markup}%` : '—'}</td>
+                    <td style={{ fontWeight: 600 }}>{formatCurrency(calcItemTotal(item))}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {(selected.orderDiscount > 0 || selected.orderMarkup > 0) && (
+            <div className="table-container" style={{ marginBottom: 16 }}>
+              <table className="data-table">
+                <tbody>
+                  {selected.subtotal && <tr><td>Subtotal</td><td className="text-right">{formatCurrency(selected.subtotal)}</td></tr>}
+                  {selected.orderDiscount > 0 && <tr><td>Order Discount</td><td className="text-right">-{selected.orderDiscount}%</td></tr>}
+                  {selected.orderMarkup > 0 && <tr><td>Order Markup</td><td className="text-right">+{selected.orderMarkup}%</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          )}
           <div className="flex-between" style={{ fontSize: '1.1rem', fontWeight: 700 }}>
             <span>Total</span><span>{formatCurrency(selected.total)}</span>
           </div>

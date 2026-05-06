@@ -5,7 +5,7 @@ import { usePosStore } from '../stores/posStore';
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
 import { formatCurrency, generateReceiptNo } from '../utils/formatters';
-import { calcCartTotal, calcItemTotal } from '../utils/calculations';
+import { calcCartTotal } from '../utils/calculations';
 import { recordIngredientMovement, updateDailySalesSummary } from '../utils/durability';
 import { closeRunningBill, deleteRunningBill, loadOpenBills, saveRunningBill } from '../utils/runningBills';
 import ProductGrid from '../components/pos/ProductGrid';
@@ -23,7 +23,7 @@ export default function PointOfSale() {
   const [receipt, setReceipt] = useState(null);
   const [runningBills, setRunningBills] = useState([]);
   const [activeBill, setActiveBill] = useState(null);
-  const { cart, orderType, addItem, clearCart, setCart } = usePosStore();
+  const { cart, orderType, orderDiscount, orderMarkup, addItem, clearCart, setCart } = usePosStore();
   const currentStaff = useAuthStore(s => s.currentStaff);
   const toast = useToast();
 
@@ -42,10 +42,12 @@ export default function PointOfSale() {
       tableName,
       items: cart.map(i => ({ ...i })),
       orderType,
-      total: calcCartTotal(cart),
+      orderDiscount,
+      orderMarkup,
+      total: calcCartTotal(cart, orderDiscount, orderMarkup),
       staff: currentStaff,
     });
-    setActiveBill({ ...(activeBill || {}), id, tableName, items: cart.map(i => ({ ...i })), orderType, total: calcCartTotal(cart), staffName: currentStaff?.name });
+    setActiveBill({ ...(activeBill || {}), id, tableName, items: cart.map(i => ({ ...i })), orderType, orderDiscount, orderMarkup, total: calcCartTotal(cart, orderDiscount, orderMarkup), staffName: currentStaff?.name });
     await refreshBills();
     toast(activeBill ? 'Running bill updated' : 'Running bill saved', 'success');
     clearCart();
@@ -54,7 +56,7 @@ export default function PointOfSale() {
 
   function loadBill(bill) {
     setActiveBill(bill);
-    setCart(bill.items || [], bill.orderType || 'Dine In');
+    setCart(bill.items || [], bill.orderType || 'Dine In', bill.orderDiscount || 0, bill.orderMarkup || 0);
   }
 
   async function closeBill() {
@@ -69,15 +71,22 @@ export default function PointOfSale() {
 
   async function handlePayment(method, cashReceived) {
     try {
-      const total = calcCartTotal(cart);
+      const total = calcCartTotal(cart, orderDiscount, orderMarkup);
       const receiptNo = generateReceiptNo();
       const txn = {
         receiptNo, datetime: Date.now(), orderType,
         items: cart.map(i => ({ ...i })), paymentMethod: method,
+        orderDiscount, orderMarkup, subtotal: calcCartTotal(cart),
         total, cashReceived: method === 'Cash' ? cashReceived : null,
         staffId: currentStaff?.id, staffName: currentStaff?.name, status: 'completed',
       };
-      const transactionId = await db.transactions.add(txn);
+      let transactionId;
+      try {
+        transactionId = await db.transactions.add(txn);
+      } catch (error) {
+        const { orderDiscount: _orderDiscount, orderMarkup: _orderMarkup, subtotal: _subtotal, ...legacyTxn } = txn;
+        transactionId = await db.transactions.add(legacyTxn);
+      }
       const savedTxn = { ...txn, id: transactionId };
       const summaryUpdated = await updateDailySalesSummary(savedTxn);
       if (activeBill) await closeRunningBill(activeBill.id, transactionId);
@@ -196,7 +205,7 @@ export default function PointOfSale() {
         <ProductGrid products={products} category={category} subCategory={subCategory} searchQuery={search} onAdd={addItem} />
       </div>
       <CartPanel onCharge={() => setShowPayment(true)} activeBill={activeBill} onSaveBill={saveBill} onCloseBill={closeBill} />
-      {showPayment && <PaymentModal total={calcCartTotal(cart)} onConfirm={handlePayment} onClose={() => setShowPayment(false)} />}
+      {showPayment && <PaymentModal total={calcCartTotal(cart, orderDiscount, orderMarkup)} onConfirm={handlePayment} onClose={() => setShowPayment(false)} />}
       {receipt && <ReceiptModal transaction={receipt} onClose={() => setReceipt(null)} />}
     </div>
   );
