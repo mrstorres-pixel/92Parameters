@@ -128,6 +128,11 @@ const db = {
   timeRecords: buildTable('time_records'),
   voidLog: buildTable('void_log'),
   auditLog: buildTable('audit_log'),
+  async rpc(name, params) {
+    const { data, error } = await supabase.rpc(name, params);
+    handleMutationError(name, 'calling rpc', error);
+    return data;
+  },
   
   // Dummy functions to keep existing code happy
   version() { return { stores() {} }; },

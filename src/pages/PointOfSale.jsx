@@ -8,6 +8,7 @@ import { formatCurrency, generateReceiptNo } from '../utils/formatters';
 import { calcCartTotal } from '../utils/calculations';
 import { recordIngredientMovement, updateDailySalesSummary } from '../utils/durability';
 import { closeRunningBill, deleteRunningBill, loadOpenBills, saveRunningBill } from '../utils/runningBills';
+import { adjustIngredientStock } from '../utils/stockAdjustments';
 import ProductGrid from '../components/pos/ProductGrid';
 import CartPanel from '../components/pos/CartPanel';
 import PaymentModal from '../components/pos/PaymentModal';
@@ -27,7 +28,17 @@ export default function PointOfSale() {
   const currentStaff = useAuthStore(s => s.currentStaff);
   const toast = useToast();
 
-  useEffect(() => { db.products.toArray().then(setProducts); refreshBills(); }, []);
+  useEffect(() => {
+    db.products.toArray().then(setProducts);
+    refreshBills();
+    const interval = setInterval(refreshBills, 10000);
+    const onFocus = () => refreshBills();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, []);
 
   async function refreshBills() {
     setRunningBills(await loadOpenBills());
@@ -37,21 +48,27 @@ export default function PointOfSale() {
     if (cart.length === 0) return;
     const tableName = activeBill?.tableName || window.prompt('Table name / number?');
     if (!tableName) return;
-    const id = await saveRunningBill({
-      billId: activeBill?.id,
-      tableName,
-      items: cart.map(i => ({ ...i })),
-      orderType,
-      orderDiscount,
-      orderMarkup,
-      total: calcCartTotal(cart, orderDiscount, orderMarkup),
-      staff: currentStaff,
-    });
-    setActiveBill({ ...(activeBill || {}), id, tableName, items: cart.map(i => ({ ...i })), orderType, orderDiscount, orderMarkup, total: calcCartTotal(cart, orderDiscount, orderMarkup), staffName: currentStaff?.name });
-    await refreshBills();
-    toast(activeBill ? 'Running bill updated' : 'Running bill saved', 'success');
-    clearCart();
-    setActiveBill(null);
+    try {
+      const id = await saveRunningBill({
+        billId: activeBill?.id,
+        tableName,
+        items: cart.map(i => ({ ...i })),
+        orderType,
+        orderDiscount,
+        orderMarkup,
+        total: calcCartTotal(cart, orderDiscount, orderMarkup),
+        staff: currentStaff,
+        expectedUpdatedAt: activeBill?.updatedAt,
+      });
+      setActiveBill({ ...(activeBill || {}), id, tableName, items: cart.map(i => ({ ...i })), orderType, orderDiscount, orderMarkup, total: calcCartTotal(cart, orderDiscount, orderMarkup), staffName: currentStaff?.name, updatedAt: Date.now() });
+      await refreshBills();
+      toast(activeBill ? 'Running bill updated' : 'Running bill saved', 'success');
+      clearCart();
+      setActiveBill(null);
+    } catch (error) {
+      await refreshBills();
+      toast(error.message || 'Running bill changed on another device. Reload it and try again.', 'error');
+    }
   }
 
   function loadBill(bill) {
@@ -98,8 +115,7 @@ export default function PointOfSale() {
           const ing = await db.ingredients.get(link.ingredientId);
           if (ing) {
             const deducted = link.quantity * item.quantity;
-            const nextStock = Math.max(0, ing.inStock - deducted);
-            await db.ingredients.update(link.ingredientId, { inStock: nextStock });
+            const { beforeStock, afterStock } = await adjustIngredientStock(ing, -deducted);
             await db.auditLog.add({
               action: 'DEDUCT',
               entity: ing.name,
@@ -107,7 +123,7 @@ export default function PointOfSale() {
               staffId: currentStaff?.id,
               staffName: currentStaff?.name,
               datetime: Date.now(),
-              details: `Deducted ${deducted}${ing.unit} for ${item.quantity} x ${item.name} (${receiptNo}); stock ${ing.inStock}${ing.unit} -> ${nextStock}${ing.unit}`
+              details: `Deducted ${deducted}${ing.unit} for ${item.quantity} x ${item.name} (${receiptNo}); stock ${beforeStock}${ing.unit} -> ${afterStock}${ing.unit}`
             });
             const movementRecorded = await recordIngredientMovement({
               ingredient: ing,
@@ -116,8 +132,8 @@ export default function PointOfSale() {
               receiptNo,
               type: 'DEDUCT',
               quantity: deducted,
-              beforeStock: ing.inStock,
-              afterStock: nextStock,
+              beforeStock,
+              afterStock,
               staff: currentStaff,
               productName: item.name,
             });

@@ -8,6 +8,7 @@ import { useAuthStore } from '../stores/authStore';
 import { formatCurrency, formatDate, formatTime, formatDateTime } from '../utils/formatters';
 import { calcItemTotal } from '../utils/calculations';
 import { PAGE_SIZE, downloadJson, getDateRangeFilters, recordIngredientMovement, reverseDailySalesSummary } from '../utils/durability';
+import { adjustIngredientStock } from '../utils/stockAdjustments';
 
 function toDateInputValue(date) {
   return date.toISOString().slice(0, 10);
@@ -75,8 +76,7 @@ export default function TransactionReport() {
         const ing = await db.ingredients.get(link.ingredientId);
         if (ing) {
           const restored = link.quantity * item.quantity;
-          const nextStock = ing.inStock + restored;
-          await db.ingredients.update(link.ingredientId, { inStock: nextStock });
+          const { beforeStock, afterStock } = await adjustIngredientStock(ing, restored);
           await db.auditLog.add({
             action: 'RESTOCK',
             entity: ing.name,
@@ -84,7 +84,7 @@ export default function TransactionReport() {
             staffId: staff?.id,
             staffName: staff?.name,
             datetime: Date.now(),
-            details: `Restored ${restored}${ing.unit} from ${reason} ${txn.receiptNo}; stock ${ing.inStock}${ing.unit} -> ${nextStock}${ing.unit}`
+            details: `Restored ${restored}${ing.unit} from ${reason} ${txn.receiptNo}; stock ${beforeStock}${ing.unit} -> ${afterStock}${ing.unit}`
           });
           await recordIngredientMovement({
             ingredient: ing,
@@ -93,8 +93,8 @@ export default function TransactionReport() {
             receiptNo: txn.receiptNo,
             type: 'RESTOCK',
             quantity: restored,
-            beforeStock: ing.inStock,
-            afterStock: nextStock,
+            beforeStock,
+            afterStock,
             staff,
             productName: item.name,
           });

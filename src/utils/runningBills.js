@@ -23,7 +23,7 @@ export async function loadOpenBills() {
   }
 }
 
-export async function saveRunningBill({ billId, tableName, items, orderType, orderDiscount, orderMarkup, total, staff }) {
+export async function saveRunningBill({ billId, tableName, items, orderType, orderDiscount, orderMarkup, total, staff, expectedUpdatedAt }) {
   const now = Date.now();
   const data = {
     tableName,
@@ -40,11 +40,18 @@ export async function saveRunningBill({ billId, tableName, items, orderType, ord
 
   try {
     if (billId) {
+      const latest = await db.runningBills.get(billId);
+      if (latest?.updatedAt && expectedUpdatedAt && Number(latest.updatedAt) !== Number(expectedUpdatedAt)) {
+        const error = new Error('Running bill was updated on another device. Reload it before saving.');
+        error.code = 'STALE_RUNNING_BILL';
+        throw error;
+      }
       await db.runningBills.update(billId, data);
       return billId;
     }
     return await db.runningBills.add({ ...data, openedAt: now });
-  } catch {
+  } catch (error) {
+    if (error.code === 'STALE_RUNNING_BILL') throw error;
     const bills = readLocalBills();
     if (billId) {
       writeLocalBills(bills.map(bill => bill.id === billId ? { ...bill, ...data } : bill));
