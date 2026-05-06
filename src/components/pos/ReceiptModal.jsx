@@ -20,10 +20,141 @@ export default function ReceiptModal({ transaction, onClose }) {
     win.print();
   }
 
+  function buildReceiptRows() {
+    const rows = [
+      { type: 'center', text: '92 PARAMETERS CAFE', bold: true },
+      { type: 'space' },
+      { type: 'center', text: 'THIS IS NOT AN OFFICIAL RECEIPT.' },
+      { type: 'center', text: 'PLEASE ASK FOR BIR SERVICE INVOICE' },
+      { type: 'space' },
+      { type: 'text', text: `Receipt No. : ${t.receiptNo}` },
+      { type: 'divider' },
+    ];
+
+    (t.items || []).forEach(item => {
+      rows.push({ type: 'pair', left: `${item.quantity} x ${item.name}`, right: formatCurrency(calcItemTotal(item)) });
+      if (Number(item.discount || 0) > 0) rows.push({ type: 'pair', left: '  Discount', right: `-${item.discount}%` });
+      if (Number(item.discountAmount || 0) > 0) rows.push({ type: 'pair', left: '  Cash discount', right: `-${formatCurrency(item.discountAmount)}` });
+    });
+
+    rows.push({ type: 'divider' });
+    if (t.orderDiscount > 0 || t.orderDiscountAmount > 0) {
+      if (t.subtotal) rows.push({ type: 'pair', left: 'Subtotal', right: formatCurrency(t.subtotal) });
+      if (t.orderDiscount > 0) rows.push({ type: 'pair', left: 'Order Discount', right: `-${t.orderDiscount}%` });
+      if (t.orderDiscountAmount > 0) rows.push({ type: 'pair', left: 'Order Discount Cash', right: `-${formatCurrency(t.orderDiscountAmount)}` });
+    }
+
+    rows.push({ type: 'pair', left: 'Total:', right: formatCurrency(t.total), bold: true });
+    if (t.cashReceived) {
+      rows.push({ type: 'pair', left: 'Cash Received:', right: formatCurrency(t.cashReceived) });
+      rows.push({ type: 'pair', left: 'Change:', right: formatCurrency(t.cashReceived - t.total), bold: true });
+    }
+    rows.push({ type: 'space' });
+    rows.push({ type: 'text', text: `Payment Method: ${t.paymentMethod}` });
+    rows.push({ type: 'text', text: t.orderType });
+    rows.push({ type: 'text', text: `Staff: ${t.staffName || 'Staff'}` });
+    rows.push({ type: 'space' });
+    rows.push({ type: 'center', text: '--- Powered by 92Parameters ---' });
+    rows.push({ type: 'center', text: formatDateTime(t.datetime) });
+    rows.push({ type: 'center', text: 'THANK YOU! SEE US AGAIN! :)', bold: true });
+    return rows;
+  }
+
+  function wrapText(ctx, text, maxWidth) {
+    const words = String(text || '').split(' ');
+    const lines = [];
+    let current = '';
+    words.forEach(word => {
+      const next = current ? `${current} ${word}` : word;
+      if (ctx.measureText(next).width <= maxWidth) current = next;
+      else {
+        if (current) lines.push(current);
+        current = word;
+      }
+    });
+    if (current) lines.push(current);
+    return lines;
+  }
+
+  function handleSaveImage() {
+    const width = 384;
+    const padding = 18;
+    const lineHeight = 20;
+    const rows = buildReceiptRows();
+    const measureCanvas = document.createElement('canvas');
+    const measureCtx = measureCanvas.getContext('2d');
+    measureCtx.font = '14px "Courier New", monospace';
+    const rowHeights = rows.map(row => {
+      if (row.type === 'space') return 10;
+      if (row.type === 'divider') return 18;
+      if (row.type === 'pair') return Math.max(1, wrapText(measureCtx, row.left, 210).length) * lineHeight;
+      return Math.max(1, wrapText(measureCtx, row.text, width - padding * 2).length) * lineHeight;
+    });
+    const height = padding * 2 + rowHeights.reduce((sum, h) => sum + h, 0);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = '#000';
+    ctx.textBaseline = 'top';
+
+    let y = padding;
+    rows.forEach((row, index) => {
+      ctx.font = `${row.bold ? '700 ' : ''}14px "Courier New", monospace`;
+      if (row.type === 'space') {
+        y += rowHeights[index];
+        return;
+      }
+      if (row.type === 'divider') {
+        ctx.fillText('-'.repeat(42), padding, y);
+        y += rowHeights[index];
+        return;
+      }
+      if (row.type === 'center') {
+        wrapText(ctx, row.text, width - padding * 2).forEach(line => {
+          ctx.fillText(line, (width - ctx.measureText(line).width) / 2, y);
+          y += lineHeight;
+        });
+        return;
+      }
+      if (row.type === 'pair') {
+        const leftLines = wrapText(ctx, row.left, 210);
+        leftLines.forEach((line, lineIndex) => {
+          ctx.fillText(line, padding, y);
+          if (lineIndex === 0) {
+            const rightWidth = ctx.measureText(row.right).width;
+            ctx.fillText(row.right, width - padding - rightWidth, y);
+          }
+          y += lineHeight;
+        });
+        return;
+      }
+      wrapText(ctx, row.text, width - padding * 2).forEach(line => {
+        ctx.fillText(line, padding, y);
+        y += lineHeight;
+      });
+    });
+
+    canvas.toBlob(blob => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${t.receiptNo || 'receipt'}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }, 'image/png');
+  }
+
   return (
     <Modal title="Receipt" onClose={onClose} footer={
       <>
         <button className="btn btn-secondary" onClick={onClose}>Close</button>
+        <button className="btn btn-secondary" onClick={handleSaveImage}>Save Image</button>
         <button className="btn btn-primary" onClick={handlePrint}>Print Receipt</button>
       </>
     }>
