@@ -76,10 +76,23 @@ export default function ReceiptModal({ transaction, onClose }) {
     return lines;
   }
 
-  function handleSaveImage() {
+  function loadImage(src) {
+    return new Promise(resolve => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => resolve(null);
+      image.src = src;
+    });
+  }
+
+  async function handleSaveImage() {
     const width = 384;
     const padding = 18;
     const lineHeight = 20;
+    const logo = await loadImage('/logo.png?v=2');
+    const logoWidth = logo ? 84 : 0;
+    const logoHeight = logo ? Math.round((logo.height / logo.width) * logoWidth) : 0;
+    const logoBlockHeight = logo ? logoHeight + 12 : 0;
     const rows = buildReceiptRows();
     const measureCanvas = document.createElement('canvas');
     const measureCtx = measureCanvas.getContext('2d');
@@ -90,7 +103,7 @@ export default function ReceiptModal({ transaction, onClose }) {
       if (row.type === 'pair') return Math.max(1, wrapText(measureCtx, row.left, 210).length) * lineHeight;
       return Math.max(1, wrapText(measureCtx, row.text, width - padding * 2).length) * lineHeight;
     });
-    const height = padding * 2 + rowHeights.reduce((sum, h) => sum + h, 0);
+    const height = padding * 2 + logoBlockHeight + rowHeights.reduce((sum, h) => sum + h, 0);
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -101,6 +114,10 @@ export default function ReceiptModal({ transaction, onClose }) {
     ctx.textBaseline = 'top';
 
     let y = padding;
+    if (logo) {
+      ctx.drawImage(logo, (width - logoWidth) / 2, y, logoWidth, logoHeight);
+      y += logoBlockHeight;
+    }
     rows.forEach((row, index) => {
       ctx.font = `${row.bold ? '700 ' : ''}14px "Courier New", monospace`;
       if (row.type === 'space') {
