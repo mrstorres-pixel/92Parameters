@@ -100,6 +100,7 @@ export default function Ingredients() {
       return String(av).localeCompare(String(bv)) * direction;
     });
   const lowItems = items.filter(i => i.inStock <= (i.lowThreshold || 0));
+  const totalStockValue = items.reduce((sum, item) => sum + calcStockValue(item.inStock, item.unitCost), 0);
 
   return (
     <div className="animate-fade">
@@ -114,6 +115,21 @@ export default function Ingredients() {
           <span><strong>Low Stock Alert:</strong> {lowItems.map(i => `${i.name} (${i.inStock}${i.unit})`).join(', ')}</span>
         </div>
       )}
+
+      <div className="stat-grid">
+        <div className="stat-card">
+          <div className="stat-label">Total Stock Value</div>
+          <div className="stat-value">{formatCurrency(totalStockValue)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Ingredients</div>
+          <div className="stat-value">{items.length}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Low / Out</div>
+          <div className="stat-value" style={{ color: lowItems.length ? 'var(--danger)' : 'var(--success)' }}>{lowItems.length}</div>
+        </div>
+      </div>
 
       <div className="toolbar">
         <div className="search-bar"><Search size={16} /><input placeholder="Search ingredients..." value={search} onChange={e => setSearch(e.target.value)} /></div>

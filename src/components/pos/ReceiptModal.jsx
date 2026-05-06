@@ -1,7 +1,15 @@
 import React, { useRef } from 'react';
 import Modal from '../common/Modal';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
-import { calcItemTotal } from '../../utils/calculations';
+import { calcItemAdjustedPrice, calcItemTotal } from '../../utils/calculations';
+
+function hasItemAdjustment(item) {
+  return Number(item.discount || 0) > 0 ||
+    Number(item.discountAmount || 0) > 0 ||
+    Number(item.markup || 0) > 0 ||
+    Number(item.markupAmount || 0) > 0 ||
+    Number(item.customPrice || 0) > 0;
+}
 
 export default function ReceiptModal({ transaction, onClose }) {
   const ref = useRef();
@@ -50,6 +58,51 @@ export default function ReceiptModal({ transaction, onClose }) {
               <span>{item.quantity} x {item.name}</span>
               <span>{formatCurrency(calcItemTotal(item))}</span>
             </div>
+            {hasItemAdjustment(item) && (
+              <div style={{ fontSize: '11px', paddingLeft: '12px', color: '#333' }}>
+                <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Regular unit</span>
+                  <span>{formatCurrency(item.price)}</span>
+                </div>
+                {Number(item.customPrice || 0) > 0 ? (
+                  <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Custom unit</span>
+                    <span>{formatCurrency(item.customPrice)}</span>
+                  </div>
+                ) : (
+                  <>
+                    {Number(item.discount || 0) > 0 && (
+                      <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Discount</span>
+                        <span>-{item.discount}%</span>
+                      </div>
+                    )}
+                    {Number(item.discountAmount || 0) > 0 && (
+                      <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Cash discount</span>
+                        <span>-{formatCurrency(item.discountAmount)}</span>
+                      </div>
+                    )}
+                    {Number(item.markup || 0) > 0 && (
+                      <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Markup</span>
+                        <span>+{item.markup}%</span>
+                      </div>
+                    )}
+                    {Number(item.markupAmount || 0) > 0 && (
+                      <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Cash markup</span>
+                        <span>+{formatCurrency(item.markupAmount)}</span>
+                      </div>
+                    )}
+                    <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Adjusted unit</span>
+                      <span>{formatCurrency(calcItemAdjustedPrice(item))}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         ))}
 
