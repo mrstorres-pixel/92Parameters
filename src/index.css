@@ -280,6 +280,8 @@ body {
 .cart-item {
   display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border);
 }
+.cart-item-expanded { flex-direction: column; align-items: stretch; gap: 8px; }
+.cart-item-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .cart-item:last-child { border-bottom: none; }
 .cart-item-info { flex: 1; min-width: 0; }
 .cart-item-name { font-size: 0.85rem; font-weight: 500; }
@@ -292,12 +294,36 @@ body {
 .cart-item-total { font-size: 0.85rem; font-weight: 600; min-width: 70px; text-align: right; }
 .cart-item-remove { color: var(--text-muted); cursor: pointer; padding: 4px; }
 .cart-item-remove:hover { color: var(--danger); }
-.discount-row { display: flex; gap: 4px; margin-top: 4px; }
+.cart-adjust-toggle {
+  width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg-card); color: var(--text-muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.cart-adjust-toggle:hover, .cart-adjust-toggle.active { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+.item-adjust-panel {
+  display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: rgba(255,255,255,0.02);
+}
+.discount-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .adjust-label { min-width: 54px; color: var(--text-muted); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; align-self: center; }
 .discount-btn { padding: 2px 8px; font-size: 0.65rem; border-radius: 4px; border: 1px solid var(--border); background: none; color: var(--text-secondary); cursor: pointer; font-family: inherit; transition: var(--transition); }
 .discount-btn:hover { border-color: var(--accent); color: var(--accent); }
 .discount-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+.adjust-custom-row { display: flex; gap: 6px; align-items: center; padding-left: 58px; }
+.adjust-custom-row .btn { padding: 4px 10px; }
+.adjust-mini-input { padding: 4px 8px; font-size: 0.75rem; width: 70px; }
+.cash-adjust-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cash-adjust-row label { display: grid; gap: 4px; color: var(--text-muted); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; }
+.cash-adjust-row .form-input { padding: 6px 8px; font-size: 0.78rem; }
 .cart-footer { padding: 16px 20px; border-top: 1px solid var(--border); }
+.order-adjust-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; margin-bottom: 8px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-secondary);
+  font-family: inherit; font-size: 0.8rem; cursor: pointer;
+}
+.order-adjust-toggle:hover, .order-adjust-toggle.active { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+.order-adjust-toggle strong { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); }
 .order-adjustments { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
 .order-adjustments .form-group { margin-bottom: 0; }
 .order-adjustments .form-input { padding: 8px 10px; }
