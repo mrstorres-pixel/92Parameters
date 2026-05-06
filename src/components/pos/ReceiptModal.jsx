@@ -12,8 +12,8 @@ export default function ReceiptModal({ transaction, onClose }) {
   const t = transaction;
 
   function handlePrint() {
-    const win = window.open('', '_blank', 'width=350,height=600');
-    win.document.write('<html><head><title>Receipt</title><style>body{font-family:Courier New,monospace;font-size:12px;padding:20px;max-width:300px;margin:0 auto}h3{margin:0}hr{border:none;border-top:1px dashed #000;margin:8px 0}.line{display:flex;justify-content:space-between;margin:2px 0}.center{text-align:center}.bold{font-weight:700}.big{font-size:16px}</style></head><body>');
+    const win = window.open('', '_blank', 'width=260,height=700');
+    win.document.write('<html><head><title>Receipt</title><style>@page{size:58mm auto;margin:0}*{box-sizing:border-box}html,body{width:58mm;margin:0;padding:0;background:#fff}body{font-family:"Courier New",monospace;font-size:11px;line-height:1.25;color:#000}.receipt{width:58mm!important;max-width:58mm!important;margin:0!important;padding:3mm!important;color:#000!important;background:#fff!important;font-family:"Courier New",monospace!important;font-size:11px!important}.receipt img{max-width:22mm!important}.receipt-line{display:flex!important;justify-content:space-between!important;gap:3mm!important}.receipt-line span:first-child{min-width:0;overflow-wrap:anywhere}.receipt-divider{border-top:1px dashed #000!important;margin:2mm 0!important}@media print{html,body{width:58mm!important}.receipt{width:58mm!important;page-break-inside:avoid}button{display:none!important}}</style></head><body>');
     win.document.write(ref.current.innerHTML);
     win.document.write('</body></html>');
     win.document.close();
