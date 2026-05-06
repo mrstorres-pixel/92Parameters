@@ -77,7 +77,7 @@ export default function TimeTracking() {
 
   const getStaffName = (id) => staff.find(s => s.id === id)?.name || 'Unknown';
   const hasActiveTimeIn = (staffId) => records.some(r => r.staffId === staffId && r.timeIn && !r.timeOut);
-  const attendanceStaff = staff.filter(s => s.role === 'staff');
+  const attendanceStaff = staff.filter(s => s.role === 'staff' || s.role === 'manager');
 
   const isToday = filterDate === new Date().toISOString().slice(0,10);
 
@@ -116,7 +116,7 @@ export default function TimeTracking() {
             })}
             {attendanceStaff.length === 0 && (
               <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
-                <p>No attendance-only staff found.</p>
+                <p>No staff or managers found for time tracking.</p>
               </div>
             )}
           </div>
