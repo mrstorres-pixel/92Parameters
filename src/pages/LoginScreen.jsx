@@ -10,7 +10,10 @@ export default function LoginScreen() {
   const submitPin = useCallback(async (value) => {
     if (value.length !== 4) return;
     const staff = await db.staff.where('pin').equals(value).first();
-    if (staff) { login(staff); }
+    if (staff?.role === 'staff') {
+      setError('This profile is for time tracking only');
+      setTimeout(() => { setPin(''); setError(''); }, 1200);
+    } else if (staff) { login(staff); }
     else { setError('Invalid PIN'); setTimeout(() => { setPin(''); setError(''); }, 1000); }
   }, [login]);
 
@@ -24,7 +27,10 @@ export default function LoginScreen() {
     setPin(newPin);
     if (newPin.length === 4) {
       const staff = await db.staff.where('pin').equals(newPin).first();
-      if (staff) { login(staff); }
+      if (staff?.role === 'staff') {
+        setError('This profile is for time tracking only');
+        setTimeout(() => { setPin(''); setError(''); }, 1200);
+      } else if (staff) { login(staff); }
       else { setError('Invalid PIN'); setTimeout(() => { setPin(''); setError(''); }, 1000); }
     }
   }, [login, pin, submitPin]);

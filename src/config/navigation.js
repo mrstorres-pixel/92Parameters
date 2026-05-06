@@ -6,7 +6,7 @@ export const navItems = [
   { to: '/transactions', icon: Receipt, label: 'Transaction', roles: ['cashier', 'manager', 'owner'] },
   { to: '/cash', icon: DollarSign, label: 'Cash Drawer', roles: ['cashier', 'manager', 'owner'] },
   { to: '/time-tracking', icon: Clock, label: 'Time Tracking', roles: ['cashier', 'manager', 'owner'] },
-  { to: '/products', icon: Package, label: 'Products', roles: ['cashier', 'manager', 'owner'] },
+  { to: '/products', icon: Package, label: 'Products', roles: ['owner'] },
   { to: '/inventory', icon: Warehouse, label: 'Inventory', roles: ['owner'] },
   { to: '/ingredients', icon: Leaf, label: 'Ingredients', roles: ['owner'] },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['owner'] },

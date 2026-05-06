@@ -26,9 +26,8 @@ export default function StaffManagement() {
   
   async function load() {
     const allStaff = await db.staff.toArray();
-    // Sort by role (owner -> manager -> cashier)
-    const roleOrder = { owner: 1, manager: 2, cashier: 3 };
-    allStaff.sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
+    const roleOrder = { owner: 1, manager: 2, cashier: 3, staff: 4 };
+    allStaff.sort((a, b) => (roleOrder[a.role] || 99) - (roleOrder[b.role] || 99));
     setStaff(allStaff);
   }
 
@@ -39,28 +38,29 @@ export default function StaffManagement() {
   }
 
   function openEdit(s) {
-    setForm({ ...s });
+    setForm({ ...s, pin: s.pin || '' });
     setShowPin(false);
     setEditing(s.id);
   }
 
   async function save() {
-    if (!form.name || !form.pin || !form.role) {
+    const isAttendanceOnly = form.role === 'staff';
+    if (!form.name || !form.role || (!isAttendanceOnly && !form.pin)) {
       toast('Please fill all required fields', 'error');
       return;
     }
     
-    // Check if PIN is exactly 4 digits
-    if (!/^\d{4}$/.test(form.pin)) {
+    if (!isAttendanceOnly && !/^\d{4}$/.test(form.pin)) {
       toast('PIN must be exactly 4 digits', 'error');
       return;
     }
 
-    // Ensure PIN is unique
-    const existing = await db.staff.where('pin').equals(form.pin).first();
-    if (existing && existing.id !== editing) {
-      toast('This PIN is already in use by another staff member', 'error');
-      return;
+    if (!isAttendanceOnly) {
+      const existing = await db.staff.where('pin').equals(form.pin).first();
+      if (existing && existing.id !== editing) {
+        toast('This PIN is already in use by another staff member', 'error');
+        return;
+      }
     }
     if (Number(form.hourlyRate || 0) < 0) {
       toast('Hourly rate cannot be negative', 'error');
@@ -69,7 +69,7 @@ export default function StaffManagement() {
 
     const data = { 
       name: form.name, 
-      pin: form.pin, 
+      pin: isAttendanceOnly ? null : form.pin,
       role: form.role,
       hourlyRate: Number(form.hourlyRate || 0),
       profileImage: form.profileImage
@@ -181,7 +181,7 @@ export default function StaffManagement() {
                   </span>
                 </td>
                 <td style={{ fontWeight: 500 }}>{formatCurrency(s.hourlyRate || 0)}/hr</td>
-                <td style={{ fontFamily: 'monospace', letterSpacing: 2 }}>****</td>
+                <td style={{ fontFamily: 'monospace', letterSpacing: s.pin ? 2 : 0 }}>{s.role === 'staff' || !s.pin ? 'No login' : '****'}</td>
                 <td>
                   <div className="flex gap-8">
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openEdit(s)} title="Edit">
@@ -196,7 +196,7 @@ export default function StaffManagement() {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={4} className="text-center text-muted" style={{ padding: 24 }}>No staff found</td>
+                <td colSpan={5} className="text-center text-muted" style={{ padding: 24 }}>No staff found</td>
               </tr>
             )}
           </tbody>
@@ -234,24 +234,26 @@ export default function StaffManagement() {
               <select 
                 className="form-select" 
                 value={form.role} 
-                onChange={e => setForm({...form, role: e.target.value})}
+                onChange={e => setForm({...form, role: e.target.value, pin: e.target.value === 'staff' ? '' : form.pin})}
                 style={{ textTransform: 'capitalize' }}
               >
                 <option value="cashier">Cashier</option>
                 <option value="manager">Manager</option>
                 <option value="owner">Owner</option>
+                <option value="staff">Staff (Time Tracking Only)</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label className="form-label">4-Digit PIN</label>
+              <label className="form-label">4-Digit PIN {form.role === 'staff' ? '(not needed)' : ''}</label>
               <div style={{ display: 'flex', gap: 8 }}>
                 <input 
                   className="form-input" 
                   type={showPin ? "text" : "password"}
                   maxLength={4}
-                  placeholder="e.g. 1234"
+                  placeholder={form.role === 'staff' ? 'No login access' : 'e.g. 1234'}
                   value={form.pin} 
+                  disabled={form.role === 'staff'}
                   onChange={e => {
                     const val = e.target.value.replace(/\D/g, ''); // only allow digits
                     setForm({...form, pin: val});
@@ -261,6 +263,7 @@ export default function StaffManagement() {
                 <button 
                   className="btn btn-secondary" 
                   onClick={() => setShowPin(!showPin)}
+                  disabled={form.role === 'staff'}
                   style={{ width: 80 }}
                 >
                   {showPin ? 'Hide' : 'Show'}

@@ -5,16 +5,16 @@ import { formatCurrency } from '../../utils/formatters';
 import { calcItemTotal, calcCartTotal, calcCartSubtotal, calcItemAdjustedPrice } from '../../utils/calculations';
 
 export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBill }) {
-  const { cart, orderType, orderDiscount, orderMarkup, orderDiscountAmount, orderMarkupAmount, setOrderType, setOrderDiscount, setOrderMarkup, setOrderDiscountAmount, setOrderMarkupAmount, updateQuantity, removeItem, setDiscount, setMarkup, setDiscountAmount, setMarkupAmount, clearCart } = usePosStore();
+  const { cart, orderType, orderDiscount, orderDiscountAmount, setOrderType, setOrderDiscount, setOrderDiscountAmount, updateQuantity, removeItem, setDiscount, setMarkup, setCustomPrice, clearCart } = usePosStore();
   const subtotal = calcCartSubtotal(cart);
-  const total = calcCartTotal(cart, orderDiscount, orderMarkup, orderDiscountAmount, orderMarkupAmount);
+  const total = calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0);
   const [customDiscountItem, setCustomDiscountItem] = useState(null);
   const [customMarkupItem, setCustomMarkupItem] = useState(null);
   const [customVal, setCustomVal] = useState('');
   const [customMarkupVal, setCustomMarkupVal] = useState('');
   const [adjustingItem, setAdjustingItem] = useState(null);
   const [showOrderAdjustments, setShowOrderAdjustments] = useState(false);
-  const hasOrderAdjustments = orderDiscount > 0 || orderMarkup > 0 || orderDiscountAmount > 0 || orderMarkupAmount > 0;
+  const hasOrderAdjustments = orderDiscount > 0 || orderDiscountAmount > 0;
 
   function applyPreset(productId, pct) {
     const item = cart.find(i => i.productId === productId);
@@ -63,12 +63,11 @@ export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBil
               <div className="cart-item-info">
                 <div className="cart-item-name">{item.name}</div>
                 <div className="cart-item-price">
-                  {item.discount > 0 && <span className="original">{formatCurrency(item.price)}</span>}
-                  {formatCurrency(calcItemAdjustedPrice(item.price, item.discount, item.markup, item.discountAmount, item.markupAmount))}
+                  {Number(item.customPrice || 0) > 0 && <span className="original">{formatCurrency(item.price)}</span>}
+                  {formatCurrency(calcItemAdjustedPrice(item))}
                   {item.discount > 0 && <span style={{ color: 'var(--success)', marginLeft: 4, fontSize: '0.7rem' }}>-{item.discount}%</span>}
                   {item.markup > 0 && <span style={{ color: 'var(--warning)', marginLeft: 4, fontSize: '0.7rem' }}>+{item.markup}%</span>}
-                  {item.discountAmount > 0 && <span style={{ color: 'var(--success)', marginLeft: 4, fontSize: '0.7rem' }}>-{formatCurrency(item.discountAmount)}</span>}
-                  {item.markupAmount > 0 && <span style={{ color: 'var(--warning)', marginLeft: 4, fontSize: '0.7rem' }}>+{formatCurrency(item.markupAmount)}</span>}
+                  {Number(item.customPrice || 0) > 0 && <span style={{ color: 'var(--accent)', marginLeft: 4, fontSize: '0.7rem' }}>Custom</span>}
                 </div>
               </div>
               <div className="cart-item-qty">
@@ -96,15 +95,12 @@ export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBil
                     <button className="btn btn-primary btn-sm" onClick={applyCustom}>Apply</button>
                   </div>
                 )}
-                <div className="cash-adjust-row">
+                <div className="custom-price-row">
                   <label>
-                    <span>Cash Off</span>
-                    <input className="form-input" type="number" min="0" placeholder="PHP" value={item.discountAmount || ''} onChange={e => setDiscountAmount(item.productId, e.target.value)} />
+                    <span>Custom Unit Price</span>
+                    <input className="form-input" type="number" min="0" placeholder="Use regular price" value={item.customPrice || ''} onChange={e => setCustomPrice(item.productId, e.target.value)} />
                   </label>
-                  <label>
-                    <span>Cash Add</span>
-                    <input className="form-input" type="number" min="0" placeholder="PHP" value={item.markupAmount || ''} onChange={e => setMarkupAmount(item.productId, e.target.value)} />
-                  </label>
+                  {Number(item.customPrice || 0) > 0 && <button className="btn btn-secondary btn-sm" onClick={() => setCustomPrice(item.productId, 0)}>Reset</button>}
                 </div>
                 <div className="discount-row">
                   <span className="adjust-label">Markup</span>
@@ -140,16 +136,8 @@ export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBil
               <input className="form-input" type="number" min="0" max="100" value={orderDiscount || ''} onChange={e => setOrderDiscount(e.target.value)} placeholder="0" />
             </div>
             <div className="form-group">
-              <label className="form-label">Markup %</label>
-              <input className="form-input" type="number" min="0" value={orderMarkup || ''} onChange={e => setOrderMarkup(e.target.value)} placeholder="0" />
-            </div>
-            <div className="form-group">
               <label className="form-label">Discount PHP</label>
               <input className="form-input" type="number" min="0" value={orderDiscountAmount || ''} onChange={e => setOrderDiscountAmount(e.target.value)} placeholder="0" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Markup PHP</label>
-              <input className="form-input" type="number" min="0" value={orderMarkupAmount || ''} onChange={e => setOrderMarkupAmount(e.target.value)} placeholder="0" />
             </div>
           </div>
         )}
