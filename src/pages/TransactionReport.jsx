@@ -40,7 +40,7 @@ function formatAdjustment(percent, amount) {
   const parts = [];
   if (Number(percent || 0) > 0) parts.push(`${percent}%`);
   if (Number(amount || 0) > 0) parts.push(formatCurrency(amount));
-  return parts.length ? parts.join(' + ') : 'â€”';
+  return parts.length ? parts.join(' + ') : '-';
 }
 
 function formatUnitPrice(item) {
