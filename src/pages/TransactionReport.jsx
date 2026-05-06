@@ -36,6 +36,13 @@ function getRangeBounds(range, customStart, customEnd) {
   return { start, end };
 }
 
+function formatAdjustment(percent, amount) {
+  const parts = [];
+  if (Number(percent || 0) > 0) parts.push(`${percent}%`);
+  if (Number(amount || 0) > 0) parts.push(formatCurrency(amount));
+  return parts.length ? parts.join(' + ') : 'â€”';
+}
+
 export default function TransactionReport() {
   const [txns, setTxns] = useState([]);
   const [staff, setStaff] = useState([]);
@@ -307,21 +314,23 @@ export default function TransactionReport() {
                 {(selected.items || []).map((item, i) => (
                   <tr key={i}>
                     <td>{item.name}</td><td>{item.quantity}</td><td>{formatCurrency(item.price)}</td>
-                    <td>{item.discount > 0 ? `${item.discount}%` : '—'}</td>
-                    <td>{item.markup > 0 ? `${item.markup}%` : '—'}</td>
+                    <td>{formatAdjustment(item.discount, item.discountAmount)}</td>
+                    <td>{formatAdjustment(item.markup, item.markupAmount)}</td>
                     <td style={{ fontWeight: 600 }}>{formatCurrency(calcItemTotal(item))}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {(selected.orderDiscount > 0 || selected.orderMarkup > 0) && (
+          {(selected.orderDiscount > 0 || selected.orderMarkup > 0 || selected.orderDiscountAmount > 0 || selected.orderMarkupAmount > 0) && (
             <div className="table-container" style={{ marginBottom: 16 }}>
               <table className="data-table">
                 <tbody>
                   {selected.subtotal && <tr><td>Subtotal</td><td className="text-right">{formatCurrency(selected.subtotal)}</td></tr>}
                   {selected.orderDiscount > 0 && <tr><td>Order Discount</td><td className="text-right">-{selected.orderDiscount}%</td></tr>}
+                  {selected.orderDiscountAmount > 0 && <tr><td>Order Discount Cash</td><td className="text-right">-{formatCurrency(selected.orderDiscountAmount)}</td></tr>}
                   {selected.orderMarkup > 0 && <tr><td>Order Markup</td><td className="text-right">+{selected.orderMarkup}%</td></tr>}
+                  {selected.orderMarkupAmount > 0 && <tr><td>Order Markup Cash</td><td className="text-right">+{formatCurrency(selected.orderMarkupAmount)}</td></tr>}
                 </tbody>
               </table>
             </div>

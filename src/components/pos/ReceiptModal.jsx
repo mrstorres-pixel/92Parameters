@@ -55,7 +55,7 @@ export default function ReceiptModal({ transaction, onClose }) {
 
         <div className="receipt-divider" style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
 
-        {(t.orderDiscount > 0 || t.orderMarkup > 0) && (
+        {(t.orderDiscount > 0 || t.orderMarkup > 0 || t.orderDiscountAmount > 0 || t.orderMarkupAmount > 0) && (
           <div style={{ marginBottom: '8px' }}>
             {t.subtotal && (
               <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -69,10 +69,22 @@ export default function ReceiptModal({ transaction, onClose }) {
                 <span>-{t.orderDiscount}%</span>
               </div>
             )}
+            {t.orderDiscountAmount > 0 && (
+              <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Order Discount Cash</span>
+                <span>-{formatCurrency(t.orderDiscountAmount)}</span>
+              </div>
+            )}
             {t.orderMarkup > 0 && (
               <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span>Order Markup</span>
                 <span>+{t.orderMarkup}%</span>
+              </div>
+            )}
+            {t.orderMarkupAmount > 0 && (
+              <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Order Markup Cash</span>
+                <span>+{formatCurrency(t.orderMarkupAmount)}</span>
               </div>
             )}
           </div>

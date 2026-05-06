@@ -5,7 +5,7 @@ import { usePosStore } from '../stores/posStore';
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
 import { formatCurrency, generateReceiptNo } from '../utils/formatters';
-import { calcCartTotal } from '../utils/calculations';
+import { calcCartSubtotal, calcCartTotal } from '../utils/calculations';
 import { recordIngredientMovement, updateDailySalesSummary } from '../utils/durability';
 import { closeRunningBill, deleteRunningBill, loadOpenBills, saveRunningBill } from '../utils/runningBills';
 import { adjustIngredientStock } from '../utils/stockAdjustments';
@@ -24,7 +24,7 @@ export default function PointOfSale() {
   const [receipt, setReceipt] = useState(null);
   const [runningBills, setRunningBills] = useState([]);
   const [activeBill, setActiveBill] = useState(null);
-  const { cart, orderType, orderDiscount, orderMarkup, addItem, clearCart, setCart } = usePosStore();
+  const { cart, orderType, orderDiscount, orderMarkup, orderDiscountAmount, orderMarkupAmount, addItem, clearCart, setCart } = usePosStore();
   const currentStaff = useAuthStore(s => s.currentStaff);
   const toast = useToast();
 
@@ -56,11 +56,13 @@ export default function PointOfSale() {
         orderType,
         orderDiscount,
         orderMarkup,
-        total: calcCartTotal(cart, orderDiscount, orderMarkup),
+        orderDiscountAmount,
+        orderMarkupAmount,
+        total: calcCartTotal(cart, orderDiscount, orderMarkup, orderDiscountAmount, orderMarkupAmount),
         staff: currentStaff,
         expectedUpdatedAt: activeBill?.updatedAt,
       });
-      setActiveBill({ ...(activeBill || {}), id, tableName, items: cart.map(i => ({ ...i })), orderType, orderDiscount, orderMarkup, total: calcCartTotal(cart, orderDiscount, orderMarkup), staffName: currentStaff?.name, updatedAt: Date.now() });
+      setActiveBill({ ...(activeBill || {}), id, tableName, items: cart.map(i => ({ ...i })), orderType, orderDiscount, orderMarkup, orderDiscountAmount, orderMarkupAmount, total: calcCartTotal(cart, orderDiscount, orderMarkup, orderDiscountAmount, orderMarkupAmount), staffName: currentStaff?.name, updatedAt: Date.now() });
       await refreshBills();
       toast(activeBill ? 'Running bill updated' : 'Running bill saved', 'success');
       clearCart();
@@ -73,7 +75,7 @@ export default function PointOfSale() {
 
   function loadBill(bill) {
     setActiveBill(bill);
-    setCart(bill.items || [], bill.orderType || 'Dine In', bill.orderDiscount || 0, bill.orderMarkup || 0);
+    setCart(bill.items || [], bill.orderType || 'Dine In', bill.orderDiscount || 0, bill.orderMarkup || 0, bill.orderDiscountAmount || 0, bill.orderMarkupAmount || 0);
   }
 
   async function closeBill() {
@@ -88,12 +90,12 @@ export default function PointOfSale() {
 
   async function handlePayment(method, cashReceived) {
     try {
-      const total = calcCartTotal(cart, orderDiscount, orderMarkup);
+      const total = calcCartTotal(cart, orderDiscount, orderMarkup, orderDiscountAmount, orderMarkupAmount);
       const receiptNo = generateReceiptNo();
       const txn = {
         receiptNo, datetime: Date.now(), orderType,
         items: cart.map(i => ({ ...i })), paymentMethod: method,
-        orderDiscount, orderMarkup, subtotal: calcCartTotal(cart),
+        orderDiscount, orderMarkup, orderDiscountAmount, orderMarkupAmount, subtotal: calcCartSubtotal(cart),
         total, cashReceived: method === 'Cash' ? cashReceived : null,
         staffId: currentStaff?.id, staffName: currentStaff?.name, status: 'completed',
       };
@@ -101,7 +103,7 @@ export default function PointOfSale() {
       try {
         transactionId = await db.transactions.add(txn);
       } catch (error) {
-        const { orderDiscount: _orderDiscount, orderMarkup: _orderMarkup, subtotal: _subtotal, ...legacyTxn } = txn;
+        const { orderDiscount: _orderDiscount, orderMarkup: _orderMarkup, orderDiscountAmount: _orderDiscountAmount, orderMarkupAmount: _orderMarkupAmount, subtotal: _subtotal, ...legacyTxn } = txn;
         transactionId = await db.transactions.add(legacyTxn);
       }
       const savedTxn = { ...txn, id: transactionId };
@@ -221,7 +223,7 @@ export default function PointOfSale() {
         <ProductGrid products={products} category={category} subCategory={subCategory} searchQuery={search} onAdd={addItem} />
       </div>
       <CartPanel onCharge={() => setShowPayment(true)} activeBill={activeBill} onSaveBill={saveBill} onCloseBill={closeBill} />
-      {showPayment && <PaymentModal total={calcCartTotal(cart, orderDiscount, orderMarkup)} onConfirm={handlePayment} onClose={() => setShowPayment(false)} />}
+      {showPayment && <PaymentModal total={calcCartTotal(cart, orderDiscount, orderMarkup, orderDiscountAmount, orderMarkupAmount)} onConfirm={handlePayment} onClose={() => setShowPayment(false)} />}
       {receipt && <ReceiptModal transaction={receipt} onClose={() => setReceipt(null)} />}
     </div>
   );

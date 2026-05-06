@@ -6,9 +6,10 @@ export function calcCartSubtotal(items) {
   return items.reduce((sum, item) => sum + calcItemTotal(item), 0);
 }
 
-export function calcCartTotal(items, orderDiscount = 0, orderMarkup = 0) {
+export function calcCartTotal(items, orderDiscount = 0, orderMarkup = 0, orderDiscountAmount = 0, orderMarkupAmount = 0) {
   const subtotal = calcCartSubtotal(items);
-  return subtotal * (1 - Number(orderDiscount || 0) / 100) * (1 + Number(orderMarkup || 0) / 100);
+  const percentAdjusted = subtotal * (1 - Number(orderDiscount || 0) / 100) * (1 + Number(orderMarkup || 0) / 100);
+  return Math.max(0, percentAdjusted - Number(orderDiscountAmount || 0) + Number(orderMarkupAmount || 0));
 }
 
 export function calcItemTotal(item) {
@@ -16,15 +17,16 @@ export function calcItemTotal(item) {
   const qty = Number(item.quantity || 1);
   const discount = Number(item.discount || 0);
   const markup = Number(item.markup || 0);
-  return calcItemAdjustedPrice(price, discount, markup) * qty;
+  return calcItemAdjustedPrice(price, discount, markup, item.discountAmount, item.markupAmount) * qty;
 }
 
 export function calcItemDiscountedPrice(price, discount) {
   return Number(price) * (1 - Number(discount || 0) / 100);
 }
 
-export function calcItemAdjustedPrice(price, discount = 0, markup = 0) {
-  return Number(price || 0) * (1 - Number(discount || 0) / 100) * (1 + Number(markup || 0) / 100);
+export function calcItemAdjustedPrice(price, discount = 0, markup = 0, discountAmount = 0, markupAmount = 0) {
+  const percentAdjusted = Number(price || 0) * (1 - Number(discount || 0) / 100) * (1 + Number(markup || 0) / 100);
+  return Math.max(0, percentAdjusted - Number(discountAmount || 0) + Number(markupAmount || 0));
 }
 
 export function calcChange(paid, total) {
