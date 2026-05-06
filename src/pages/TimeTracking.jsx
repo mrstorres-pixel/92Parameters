@@ -3,7 +3,8 @@ import { Camera, Clock } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useToast } from '../components/common/Toast';
-import { formatDate, formatTime, formatCurrency } from '../utils/formatters';
+import { useAuthStore } from '../stores/authStore';
+import { formatTime, formatCurrency } from '../utils/formatters';
 
 export default function TimeTracking() {
   const [staff, setStaff] = useState([]);
@@ -14,6 +15,8 @@ export default function TimeTracking() {
   const [viewPhoto, setViewPhoto] = useState(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const currentStaff = useAuthStore(s => s.currentStaff);
+  const isOwner = currentStaff?.role === 'owner';
   const toast = useToast();
 
   useEffect(() => { load(); }, [filterDate]);
@@ -74,6 +77,7 @@ export default function TimeTracking() {
 
   const getStaffName = (id) => staff.find(s => s.id === id)?.name || 'Unknown';
   const hasActiveTimeIn = (staffId) => records.some(r => r.staffId === staffId && r.timeIn && !r.timeOut);
+  const attendanceStaff = staff.filter(s => s.role === 'staff');
 
   const isToday = filterDate === new Date().toISOString().slice(0,10);
 
@@ -81,16 +85,18 @@ export default function TimeTracking() {
     <div className="animate-fade">
       <div className="page-header">
         <h2>Time Tracking</h2>
-        <div className="search-bar" style={{ background: 'var(--bg-card)' }}>
-          <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} />
-        </div>
+        {isOwner && (
+          <div className="search-bar" style={{ background: 'var(--bg-card)' }}>
+            <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} />
+          </div>
+        )}
       </div>
 
       {isToday && (
         <>
           <h3 style={{ fontSize: '1rem', marginBottom: 16, color: 'var(--text-secondary)' }}>Select Staff</h3>
           <div className="time-grid" style={{ marginBottom: 32 }}>
-            {staff.map(s => {
+            {attendanceStaff.map(s => {
               const active = hasActiveTimeIn(s.id);
               return (
                 <div key={s.id} className="staff-card">
@@ -108,11 +114,16 @@ export default function TimeTracking() {
                 </div>
               );
             })}
+            {attendanceStaff.length === 0 && (
+              <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
+                <p>No attendance-only staff found.</p>
+              </div>
+            )}
           </div>
         </>
       )}
 
-      {records.length > 0 && (
+      {isOwner && records.length > 0 && (
         <>
           <h3 style={{ fontSize: '1rem', marginBottom: 16, color: 'var(--text-secondary)' }}>Records for {filterDate}</h3>
           <div className="table-container">
