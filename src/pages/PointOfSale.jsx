@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Search, Clock } from 'lucide-react';
 import db from '../db/database';
 import { usePosStore } from '../stores/posStore';
@@ -21,11 +21,14 @@ export default function PointOfSale() {
   const [subCategory, setSubCategory] = useState('All');
   const [search, setSearch] = useState('');
   const [showPayment, setShowPayment] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [checkoutKey, setCheckoutKey] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [runningBills, setRunningBills] = useState([]);
   const [activeBill, setActiveBill] = useState(null);
   const { cart, orderType, orderDiscount, orderDiscountAmount, addItem, clearCart, setCart } = usePosStore();
   const currentStaff = useAuthStore(s => s.currentStaff);
+  const paymentLockRef = useRef(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -88,12 +91,27 @@ export default function PointOfSale() {
     toast('Running bill closed', 'info');
   }
 
+  function createCheckoutKey() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  function openPayment() {
+    if (cart.length === 0 || showPayment || isProcessingPayment) return;
+    setCheckoutKey(createCheckoutKey());
+    setShowPayment(true);
+  }
+
   async function handlePayment(method, cashReceived) {
+    if (paymentLockRef.current) return;
+    paymentLockRef.current = true;
+    setIsProcessingPayment(true);
     try {
       const total = calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0);
       const receiptNo = generateReceiptNo();
+      const currentCheckoutKey = checkoutKey || createCheckoutKey();
       const txn = {
-        receiptNo, datetime: Date.now(), orderType,
+        receiptNo, checkoutKey: currentCheckoutKey, datetime: Date.now(), orderType,
         items: cart.map(i => ({ ...i })), paymentMethod: method,
         orderDiscount, orderMarkup: 0, orderDiscountAmount, orderMarkupAmount: 0, subtotal: calcCartSubtotal(cart),
         total, cashReceived: method === 'Cash' ? cashReceived : null,
@@ -103,7 +121,13 @@ export default function PointOfSale() {
       try {
         transactionId = await db.transactions.add(txn);
       } catch (error) {
-        const { orderDiscount: _orderDiscount, orderMarkup: _orderMarkup, orderDiscountAmount: _orderDiscountAmount, orderMarkupAmount: _orderMarkupAmount, subtotal: _subtotal, ...legacyTxn } = txn;
+        if (error?.code === '23505') {
+          throw new Error('This payment is already being processed.');
+        }
+        const message = String(error?.message || '');
+        const canUseLegacyInsert = error?.code === 'PGRST204' || error?.code === '42703' || message.includes('checkoutKey');
+        if (!canUseLegacyInsert) throw error;
+        const { checkoutKey: _checkoutKey, orderDiscount: _orderDiscount, orderMarkup: _orderMarkup, orderDiscountAmount: _orderDiscountAmount, orderMarkupAmount: _orderMarkupAmount, subtotal: _subtotal, ...legacyTxn } = txn;
         transactionId = await db.transactions.add(legacyTxn);
       }
       const savedTxn = { ...txn, id: transactionId };
@@ -165,13 +189,17 @@ export default function PointOfSale() {
 
       setReceipt(savedTxn);
       setShowPayment(false);
+      setCheckoutKey(null);
       clearCart();
       setActiveBill(null);
       refreshBills();
       toast(summaryUpdated ? 'Transaction completed!' : 'Transaction completed, but summary update failed. Check Maintenance.', summaryUpdated ? 'success' : 'error');
     } catch (error) {
       console.error('Payment failed:', error);
-      toast('Could not complete transaction. Please try again or check the connection.', 'error');
+      toast(error.message || 'Could not complete transaction. Please try again or check the connection.', 'error');
+    } finally {
+      paymentLockRef.current = false;
+      setIsProcessingPayment(false);
     }
   }
 
@@ -222,8 +250,8 @@ export default function PointOfSale() {
         </div>
         <ProductGrid products={products} category={category} subCategory={subCategory} searchQuery={search} onAdd={addItem} />
       </div>
-      <CartPanel onCharge={() => setShowPayment(true)} activeBill={activeBill} onSaveBill={saveBill} onCloseBill={closeBill} />
-      {showPayment && <PaymentModal total={calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0)} onConfirm={handlePayment} onClose={() => setShowPayment(false)} />}
+      <CartPanel onCharge={openPayment} activeBill={activeBill} onSaveBill={saveBill} onCloseBill={closeBill} checkoutDisabled={showPayment || isProcessingPayment} />
+      {showPayment && <PaymentModal total={calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0)} onConfirm={handlePayment} onClose={() => { if (!isProcessingPayment) setShowPayment(false); }} isProcessing={isProcessingPayment} />}
       {receipt && <ReceiptModal transaction={receipt} onClose={() => setReceipt(null)} />}
     </div>
   );

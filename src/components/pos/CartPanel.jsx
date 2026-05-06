@@ -4,7 +4,7 @@ import { usePosStore } from '../../stores/posStore';
 import { formatCurrency } from '../../utils/formatters';
 import { calcItemTotal, calcCartTotal, calcCartSubtotal, calcItemAdjustedPrice } from '../../utils/calculations';
 
-export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBill }) {
+export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBill, checkoutDisabled = false }) {
   const { cart, orderType, orderDiscount, orderDiscountAmount, setOrderType, setOrderDiscount, setOrderDiscountAmount, updateQuantity, removeItem, setDiscount, setMarkup, setCustomPrice, clearCart } = usePosStore();
   const subtotal = calcCartSubtotal(cart);
   const total = calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0);
@@ -151,7 +151,7 @@ export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBil
           </button>
           {activeBill && <button className="btn btn-danger" onClick={onCloseBill}>Close</button>}
         </div>
-        <button className="btn btn-primary charge-btn" disabled={cart.length === 0} onClick={() => onCharge(total)}>
+        <button className="btn btn-primary charge-btn" disabled={cart.length === 0 || checkoutDisabled} onClick={() => onCharge(total)}>
           {activeBill ? 'Bill Out' : 'Charge'} {formatCurrency(total)}
         </button>
       </div>

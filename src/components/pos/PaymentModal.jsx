@@ -14,23 +14,23 @@ const methods = [
   { id: 'Foodpanda', icon: ShoppingBag, label: 'Foodpanda' },
 ];
 
-export default function PaymentModal({ total, onConfirm, onClose }) {
+export default function PaymentModal({ total, onConfirm, onClose, isProcessing = false }) {
   const [method, setMethod] = useState('Cash');
   const [cashAmount, setCashAmount] = useState('');
   const change = calcChange(Number(cashAmount), total);
-  const canConfirm = method !== 'Cash' || Number(cashAmount) >= total;
+  const canConfirm = !isProcessing && (method !== 'Cash' || Number(cashAmount) >= total);
 
   const quickAmounts = [50, 100, 200, 500, 1000].filter(a => a >= total);
 
   return (
     <Modal title="Payment" onClose={onClose} footer={
       <button className="btn btn-primary btn-lg w-full" disabled={!canConfirm} onClick={() => onConfirm(method, method === 'Cash' ? Number(cashAmount) : total)}>
-        Complete Payment
+        {isProcessing ? 'Processing...' : 'Complete Payment'}
       </button>
     }>
       <div className="payment-methods">
         {methods.map(m => (
-          <div key={m.id} className={`payment-method ${method === m.id ? 'selected' : ''}`} onClick={() => setMethod(m.id)}>
+          <div key={m.id} className={`payment-method ${method === m.id ? 'selected' : ''}`} onClick={() => { if (!isProcessing) setMethod(m.id); }}>
             <m.icon size={24} />
             <span>{m.label}</span>
           </div>
@@ -46,11 +46,11 @@ export default function PaymentModal({ total, onConfirm, onClose }) {
         <>
           <div className="form-group">
             <label className="form-label">Cash Received</label>
-            <input className="form-input" type="number" value={cashAmount} onChange={e => setCashAmount(e.target.value)} placeholder="Enter amount" style={{ fontSize: '1.25rem', textAlign: 'center' }} autoFocus />
+            <input className="form-input" type="number" value={cashAmount} onChange={e => setCashAmount(e.target.value)} placeholder="Enter amount" style={{ fontSize: '1.25rem', textAlign: 'center' }} disabled={isProcessing} autoFocus />
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
             {quickAmounts.map(a => (
-              <button key={a} className="btn btn-secondary btn-sm" onClick={() => setCashAmount(String(a))}>{formatCurrency(a)}</button>
+              <button key={a} className="btn btn-secondary btn-sm" disabled={isProcessing} onClick={() => setCashAmount(String(a))}>{formatCurrency(a)}</button>
             ))}
           </div>
           {Number(cashAmount) >= total && (
