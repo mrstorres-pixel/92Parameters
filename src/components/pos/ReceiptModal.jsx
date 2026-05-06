@@ -1,10 +1,14 @@
 import React, { useRef } from 'react';
 import Modal from '../common/Modal';
-import { formatCurrency, formatDateTime } from '../../utils/formatters';
+import { formatDateTime } from '../../utils/formatters';
 import { calcItemTotal } from '../../utils/calculations';
 
 function hasItemDiscount(item) {
   return Number(item.discount || 0) > 0 || Number(item.discountAmount || 0) > 0;
+}
+
+function formatReceiptCurrency(amount) {
+  return 'P' + Number(amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function ReceiptModal({ transaction, onClose }) {
@@ -32,22 +36,22 @@ export default function ReceiptModal({ transaction, onClose }) {
     ];
 
     (t.items || []).forEach(item => {
-      rows.push({ type: 'pair', left: `${item.quantity} x ${item.name}`, right: formatCurrency(calcItemTotal(item)) });
+      rows.push({ type: 'pair', left: `${item.quantity} x ${item.name}`, right: formatReceiptCurrency(calcItemTotal(item)) });
       if (Number(item.discount || 0) > 0) rows.push({ type: 'pair', left: '  Discount', right: `-${item.discount}%` });
-      if (Number(item.discountAmount || 0) > 0) rows.push({ type: 'pair', left: '  Cash discount', right: `-${formatCurrency(item.discountAmount)}` });
+      if (Number(item.discountAmount || 0) > 0) rows.push({ type: 'pair', left: '  Cash discount', right: `-${formatReceiptCurrency(item.discountAmount)}` });
     });
 
     rows.push({ type: 'divider' });
     if (t.orderDiscount > 0 || t.orderDiscountAmount > 0) {
-      if (t.subtotal) rows.push({ type: 'pair', left: 'Subtotal', right: formatCurrency(t.subtotal) });
+      if (t.subtotal) rows.push({ type: 'pair', left: 'Subtotal', right: formatReceiptCurrency(t.subtotal) });
       if (t.orderDiscount > 0) rows.push({ type: 'pair', left: 'Order Discount', right: `-${t.orderDiscount}%` });
-      if (t.orderDiscountAmount > 0) rows.push({ type: 'pair', left: 'Order Discount Cash', right: `-${formatCurrency(t.orderDiscountAmount)}` });
+      if (t.orderDiscountAmount > 0) rows.push({ type: 'pair', left: 'Order Discount Cash', right: `-${formatReceiptCurrency(t.orderDiscountAmount)}` });
     }
 
-    rows.push({ type: 'pair', left: 'Total:', right: formatCurrency(t.total), bold: true });
+    rows.push({ type: 'pair', left: 'Total:', right: formatReceiptCurrency(t.total), bold: true });
     if (t.cashReceived) {
-      rows.push({ type: 'pair', left: 'Cash Received:', right: formatCurrency(t.cashReceived) });
-      rows.push({ type: 'pair', left: 'Change:', right: formatCurrency(t.cashReceived - t.total), bold: true });
+      rows.push({ type: 'pair', left: 'Cash Received:', right: formatReceiptCurrency(t.cashReceived) });
+      rows.push({ type: 'pair', left: 'Change:', right: formatReceiptCurrency(t.cashReceived - t.total), bold: true });
     }
     rows.push({ type: 'space' });
     rows.push({ type: 'text', text: `Payment Method: ${t.paymentMethod}` });
@@ -200,7 +204,7 @@ export default function ReceiptModal({ transaction, onClose }) {
           <div key={i} style={{ marginBottom: '4px' }}>
             <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>{item.quantity} x {item.name}</span>
-              <span>{formatCurrency(calcItemTotal(item))}</span>
+              <span>{formatReceiptCurrency(calcItemTotal(item))}</span>
             </div>
             {hasItemDiscount(item) && (
               <div style={{ fontSize: '11px', paddingLeft: '12px', color: '#333' }}>
@@ -213,7 +217,7 @@ export default function ReceiptModal({ transaction, onClose }) {
                 {Number(item.discountAmount || 0) > 0 && (
                   <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>Cash discount</span>
-                    <span>-{formatCurrency(item.discountAmount)}</span>
+                    <span>-{formatReceiptCurrency(item.discountAmount)}</span>
                   </div>
                 )}
               </div>
@@ -228,7 +232,7 @@ export default function ReceiptModal({ transaction, onClose }) {
             {t.subtotal && (
               <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span>Subtotal</span>
-                <span>{formatCurrency(t.subtotal)}</span>
+                <span>{formatReceiptCurrency(t.subtotal)}</span>
               </div>
             )}
             {t.orderDiscount > 0 && (
@@ -240,7 +244,7 @@ export default function ReceiptModal({ transaction, onClose }) {
             {t.orderDiscountAmount > 0 && (
               <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span>Order Discount Cash</span>
-                <span>-{formatCurrency(t.orderDiscountAmount)}</span>
+                <span>-{formatReceiptCurrency(t.orderDiscountAmount)}</span>
               </div>
             )}
           </div>
@@ -249,17 +253,17 @@ export default function ReceiptModal({ transaction, onClose }) {
         <div style={{ textAlign: 'right', marginBottom: '15px' }}>
           <div className="receipt-line" style={{ display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>
             <span style={{ fontWeight: 'bold' }}>Total:</span>
-            <span style={{ fontWeight: 'bold' }}>{formatCurrency(t.total)}</span>
+            <span style={{ fontWeight: 'bold' }}>{formatReceiptCurrency(t.total)}</span>
           </div>
           {t.cashReceived && (
             <>
               <div className="receipt-line" style={{ display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>
                 <span>Cash Received:</span>
-                <span>{formatCurrency(t.cashReceived)}</span>
+                <span>{formatReceiptCurrency(t.cashReceived)}</span>
               </div>
               <div className="receipt-line" style={{ display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>
                 <span style={{ fontWeight: 'bold' }}>Change:</span>
-                <span style={{ fontWeight: 'bold' }}>{formatCurrency(t.cashReceived - t.total)}</span>
+                <span style={{ fontWeight: 'bold' }}>{formatReceiptCurrency(t.cashReceived - t.total)}</span>
               </div>
             </>
           )}
