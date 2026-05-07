@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, AlertTriangle, History, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, AlertTriangle, History, ArrowUpDown, ArrowUp, ArrowDown, PackagePlus } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useAuthStore } from '../stores/authStore';
@@ -7,6 +7,7 @@ import { useToast } from '../components/common/Toast';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
 import { calcStockValue } from '../utils/calculations';
 import { getStockStatusLabel, getStockStatus } from '../utils/formatters';
+import { recordIngredientMovement } from '../utils/durability';
 
 const empty = { name: '', unit: 'g', inStock: '', unitCost: '', lowThreshold: '' };
 
@@ -14,6 +15,9 @@ export default function Ingredients() {
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
+  const [restocking, setRestocking] = useState(null);
+  const [restockAmount, setRestockAmount] = useState('');
+  const [restockNotes, setRestockNotes] = useState('');
   const [historyItem, setHistoryItem] = useState(null);
   const [historyLogs, setHistoryLogs] = useState([]);
   const [sortBy, setSortBy] = useState({ field: 'name', direction: 'asc' });
@@ -26,6 +30,7 @@ export default function Ingredients() {
 
   function openNew() { setForm(empty); setEditing('new'); }
   function openEdit(item) { setForm({ ...item }); setEditing(item.id); }
+  function openRestock(item) { setRestocking(item); setRestockAmount(''); setRestockNotes(''); }
 
   async function openHistory(item) {
     setHistoryItem(item);
@@ -71,6 +76,55 @@ export default function Ingredients() {
     await db.productIngredients.where('ingredientId').equals(id).delete();
     await db.auditLog.add({ action: 'DELETE', entity: item?.name || 'Unknown', entityId: id, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(), details: `Deleted` });
     toast('Ingredient deleted', 'info'); load();
+  }
+
+  async function saveRestock() {
+    const quantity = Number(restockAmount);
+    if (!restocking) return;
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      toast('Enter a stock quantity greater than 0', 'error');
+      return;
+    }
+
+    try {
+      const ingredient = await db.ingredients.get(restocking.id);
+      if (!ingredient) {
+        toast('Ingredient could not be found', 'error');
+        setRestocking(null);
+        return;
+      }
+
+      const beforeStock = Number(ingredient.inStock || 0);
+      const afterStock = beforeStock + quantity;
+      const note = restockNotes.trim();
+      await db.ingredients.update(ingredient.id, { inStock: afterStock });
+      await db.auditLog.add({
+        action: 'RESTOCK',
+        entity: ingredient.name,
+        entityId: ingredient.id,
+        staffId: currentStaff?.id,
+        staffName: currentStaff?.name,
+        datetime: Date.now(),
+        details: `Added ${quantity}${ingredient.unit} from delivery${note ? ` (${note})` : ''}; stock ${beforeStock}${ingredient.unit} -> ${afterStock}${ingredient.unit}`,
+      });
+      await recordIngredientMovement({
+        ingredient,
+        ingredientId: ingredient.id,
+        transactionId: null,
+        receiptNo: note || 'Manual delivery',
+        type: 'RESTOCK',
+        quantity,
+        beforeStock,
+        afterStock,
+        staff: currentStaff,
+        productName: 'Manual delivery',
+      });
+      toast('Ingredient stock added');
+      setRestocking(null);
+      load();
+    } catch {
+      toast('Could not add ingredient stock. Please check the connection.', 'error');
+    }
   }
 
   function toggleSort(field) {
@@ -162,6 +216,7 @@ export default function Ingredients() {
                   <td>{item.lowThreshold || 0} {item.unit}</td>
                   <td>
                     <div className="flex gap-8">
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); openRestock(item); }} title="Add Stock"><PackagePlus size={14} /></button>
                       <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); openHistory(item); }} title="History"><History size={14} /></button>
                       <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); openEdit(item); }} title="Edit"><Edit2 size={14} /></button>
                       <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); remove(item.id); }} title="Delete"><Trash2 size={14} /></button>
@@ -190,6 +245,26 @@ export default function Ingredients() {
           <div className="form-row">
             <div className="form-group"><label className="form-label">Unit Cost (₱)</label><input className="form-input" type="number" value={form.unitCost} onChange={e => setForm({...form, unitCost: e.target.value})} /></div>
             <div className="form-group"><label className="form-label">Low Stock Threshold</label><input className="form-input" type="number" value={form.lowThreshold} onChange={e => setForm({...form, lowThreshold: e.target.value})} /></div>
+          </div>
+        </Modal>
+      )}
+
+      {restocking && (
+        <Modal title={`Add Stock: ${restocking.name}`} onClose={() => setRestocking(null)} footer={
+          <><button className="btn btn-secondary" onClick={() => setRestocking(null)}>Cancel</button><button className="btn btn-primary" onClick={saveRestock}>Add Stock</button></>
+        }>
+          <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', marginBottom: 16 }}>
+            <div className="stat-card"><div className="stat-label">Current</div><div className="stat-value">{Number(restocking.inStock || 0)} {restocking.unit}</div></div>
+            <div className="stat-card"><div className="stat-label">Adding</div><div className="stat-value">{Number(restockAmount || 0)} {restocking.unit}</div></div>
+            <div className="stat-card"><div className="stat-label">New Total</div><div className="stat-value">{Number(restocking.inStock || 0) + Number(restockAmount || 0)} {restocking.unit}</div></div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Quantity Delivered</label>
+            <input className="form-input" type="number" min="0" step="any" value={restockAmount} onChange={e => setRestockAmount(e.target.value)} autoFocus />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Notes</label>
+            <input className="form-input" value={restockNotes} onChange={e => setRestockNotes(e.target.value)} placeholder="Supplier, delivery receipt, or batch note" />
           </div>
         </Modal>
       )}

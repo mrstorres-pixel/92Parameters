@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown, PackagePlus } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useAuthStore } from '../stores/authStore';
@@ -13,6 +13,9 @@ export default function Inventory() {
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
+  const [restocking, setRestocking] = useState(null);
+  const [restockAmount, setRestockAmount] = useState('');
+  const [restockNotes, setRestockNotes] = useState('');
   const [form, setForm] = useState(empty);
   const [sortBy, setSortBy] = useState({ field: 'name', direction: 'asc' });
   const { currentStaff } = useAuthStore();
@@ -23,6 +26,7 @@ export default function Inventory() {
 
   function openNew() { setForm(empty); setEditing('new'); }
   function openEdit(item) { setForm({ ...item }); setEditing(item.id); }
+  function openRestock(item) { setRestocking(item); setRestockAmount(''); setRestockNotes(''); }
 
   async function save() {
     if (!form.name) { toast('Item name is required', 'error'); return; }
@@ -51,6 +55,43 @@ export default function Inventory() {
     await db.inventory.delete(id); 
     await db.auditLog.add({ action: 'DELETE', entity: item?.name || 'Unknown', entityId: id, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(), details: `Deleted` });
     toast('Item deleted', 'info'); load();
+  }
+
+  async function saveRestock() {
+    const quantity = Number(restockAmount);
+    if (!restocking) return;
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      toast('Enter a stock quantity greater than 0', 'error');
+      return;
+    }
+
+    try {
+      const item = await db.inventory.get(restocking.id);
+      if (!item) {
+        toast('Item could not be found', 'error');
+        setRestocking(null);
+        return;
+      }
+
+      const beforeStock = Number(item.inStock || 0);
+      const afterStock = beforeStock + quantity;
+      const note = restockNotes.trim();
+      await db.inventory.update(item.id, { inStock: afterStock });
+      await db.auditLog.add({
+        action: 'RESTOCK',
+        entity: item.name,
+        entityId: item.id,
+        staffId: currentStaff?.id,
+        staffName: currentStaff?.name,
+        datetime: Date.now(),
+        details: `Added ${quantity} stock from delivery${note ? ` (${note})` : ''}; stock ${beforeStock} -> ${afterStock}`,
+      });
+      toast('Stock added');
+      setRestocking(null);
+      load();
+    } catch {
+      toast('Could not add stock. Please check the connection.', 'error');
+    }
   }
 
   function toggleSort(field) {
@@ -118,6 +159,7 @@ export default function Inventory() {
                   <td>{formatCurrency(sv)}</td>
                   <td>
                     <div className="flex gap-8">
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openRestock(item)} title="Add Stock"><PackagePlus size={14} /></button>
                       <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openEdit(item)}><Edit2 size={14} /></button>
                       <button className="btn btn-ghost btn-icon btn-sm" onClick={() => remove(item.id)}><Trash2 size={14} /></button>
                     </div>
@@ -140,6 +182,26 @@ export default function Inventory() {
             <div className="form-group"><label className="form-label">Price (₱)</label><input className="form-input" type="number" value={form.price} onChange={e => setForm({...form, price: e.target.value})} /></div>
           </div>
           <div className="form-group"><label className="form-label">Cost (₱)</label><input className="form-input" type="number" value={form.cost} onChange={e => setForm({...form, cost: e.target.value})} /></div>
+        </Modal>
+      )}
+
+      {restocking && (
+        <Modal title={`Add Stock: ${restocking.name}`} onClose={() => setRestocking(null)} footer={
+          <><button className="btn btn-secondary" onClick={() => setRestocking(null)}>Cancel</button><button className="btn btn-primary" onClick={saveRestock}>Add Stock</button></>
+        }>
+          <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', marginBottom: 16 }}>
+            <div className="stat-card"><div className="stat-label">Current</div><div className="stat-value">{Number(restocking.inStock || 0)}</div></div>
+            <div className="stat-card"><div className="stat-label">Adding</div><div className="stat-value">{Number(restockAmount || 0)}</div></div>
+            <div className="stat-card"><div className="stat-label">New Total</div><div className="stat-value">{Number(restocking.inStock || 0) + Number(restockAmount || 0)}</div></div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Quantity Delivered</label>
+            <input className="form-input" type="number" min="0" step="any" value={restockAmount} onChange={e => setRestockAmount(e.target.value)} autoFocus />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Notes</label>
+            <input className="form-input" value={restockNotes} onChange={e => setRestockNotes(e.target.value)} placeholder="Supplier, delivery receipt, or batch note" />
+          </div>
         </Modal>
       )}
     </div>
