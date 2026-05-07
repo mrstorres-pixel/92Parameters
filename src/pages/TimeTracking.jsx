@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera } from 'lucide-react';
+import { Camera, CalendarDays } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useToast } from '../components/common/Toast';
@@ -13,12 +13,19 @@ function getLocalDateValue(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function getMonthStartValue(date = new Date()) {
+  return getLocalDateValue(new Date(date.getFullYear(), date.getMonth(), 1));
+}
+
 export default function TimeTracking() {
   const [staff, setStaff] = useState([]);
   const [records, setRecords] = useState([]);
+  const [attendanceSummary, setAttendanceSummary] = useState([]);
   const [capturing, setCapturing] = useState(null); // {staffId, type: 'in'|'out'}
   const [stream, setStream] = useState(null);
   const [filterDate, setFilterDate] = useState(getLocalDateValue());
+  const [summaryStart, setSummaryStart] = useState(getMonthStartValue());
+  const [summaryEnd, setSummaryEnd] = useState(getLocalDateValue());
   const [viewPhoto, setViewPhoto] = useState(null);
   const [pinPrompt, setPinPrompt] = useState(null);
   const [pinValue, setPinValue] = useState('');
@@ -29,10 +36,21 @@ export default function TimeTracking() {
   const isOwner = currentStaff?.role === 'owner';
   const toast = useToast();
 
-  useEffect(() => { load(); }, [filterDate]);
+  useEffect(() => { load(); }, [filterDate, summaryStart, summaryEnd]);
   async function load() {
-    setStaff(await db.staff.toArray());
-    setRecords(await db.timeRecords.where('date').equals(filterDate).toArray());
+    const [staffRows, dailyRecords, summaryRecords] = await Promise.all([
+      db.staff.toArray(),
+      db.timeRecords.where('date').equals(filterDate).toArray(),
+      isOwner ? db.timeRecords.query({
+        filters: [
+          { field: 'date', op: 'gte', value: summaryStart },
+          { field: 'date', op: 'lte', value: summaryEnd },
+        ],
+      }) : Promise.resolve([]),
+    ]);
+    setStaff(staffRows);
+    setRecords(dailyRecords);
+    setAttendanceSummary(buildAttendanceSummary(staffRows, summaryRecords));
   }
 
   function getDuration(inTime, outTime) {
@@ -41,6 +59,29 @@ export default function TimeTracking() {
     const hrs = Math.floor(diff/3600000);
     const mins = Math.floor((diff%3600000)/60000);
     return `${hrs}h ${mins}m`;
+  }
+
+  function buildAttendanceSummary(staffRows, timeRows) {
+    const attendanceStaffRows = staffRows.filter(s => s.role === 'staff' || s.role === 'manager');
+    const summaries = attendanceStaffRows.map(person => {
+      const personRows = timeRows.filter(r => r.staffId === person.id && r.timeIn);
+      const datesWorked = new Set(personRows.map(r => r.date));
+      const completedRows = personRows.filter(r => r.timeOut);
+      const hoursWorked = completedRows.reduce((sum, r) => sum + Math.max(0, (Number(r.timeOut) - Number(r.timeIn)) / 3600000), 0);
+      const earned = completedRows.reduce((sum, r) => sum + Number(r.salaryEarned || 0), 0);
+      return {
+        staffId: person.id,
+        name: person.name,
+        role: person.role,
+        daysWorked: datesWorked.size,
+        shifts: personRows.length,
+        completedShifts: completedRows.length,
+        activeShifts: personRows.length - completedRows.length,
+        hoursWorked,
+        earned,
+      };
+    });
+    return summaries.sort((a, b) => b.daysWorked - a.daysWorked || a.name.localeCompare(b.name));
   }
 
   function startCapture(staffId, type) {
@@ -156,6 +197,47 @@ export default function TimeTracking() {
             )}
           </div>
         </>
+      )}
+
+      {isOwner && (
+        <section style={{ marginBottom: 32 }}>
+          <div className="page-header" style={{ marginBottom: 16 }}>
+            <div>
+              <h3 style={{ fontSize: '1rem', marginBottom: 4 }}>Attendance Summary</h3>
+              <p className="text-muted text-sm">Counts distinct work days per staff member in the selected range.</p>
+            </div>
+            <div className="toolbar" style={{ margin: 0 }}>
+              <div className="search-bar" style={{ background: 'var(--bg-card)' }}>
+                <CalendarDays size={16} />
+                <input type="date" value={summaryStart} onChange={e => setSummaryStart(e.target.value)} />
+              </div>
+              <div className="search-bar" style={{ background: 'var(--bg-card)' }}>
+                <input type="date" value={summaryEnd} onChange={e => setSummaryEnd(e.target.value)} />
+              </div>
+            </div>
+          </div>
+          <div className="table-container">
+            <table className="data-table">
+              <thead><tr><th>Staff</th><th>Role</th><th>Days Worked</th><th>Shifts</th><th>Active</th><th>Hours</th><th>Earned</th></tr></thead>
+              <tbody>
+                {attendanceSummary.map(row => (
+                  <tr key={row.staffId}>
+                    <td style={{ fontWeight: 600 }}>{row.name}</td>
+                    <td><span className="badge badge-neutral">{row.role}</span></td>
+                    <td style={{ fontWeight: 700 }}>{row.daysWorked}</td>
+                    <td>{row.completedShifts}/{row.shifts}</td>
+                    <td>{row.activeShifts ? <span className="badge badge-success">{row.activeShifts}</span> : 'â€”'}</td>
+                    <td>{row.hoursWorked.toFixed(2)}h</td>
+                    <td style={{ fontWeight: 600, color: 'var(--success)' }}>{formatCurrency(row.earned)}</td>
+                  </tr>
+                ))}
+                {attendanceSummary.length === 0 && (
+                  <tr><td colSpan={7} className="text-center text-muted">No attendance records in this range.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       {isOwner && records.length > 0 && (
