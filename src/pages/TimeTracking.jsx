@@ -6,12 +6,19 @@ import { useToast } from '../components/common/Toast';
 import { useAuthStore } from '../stores/authStore';
 import { formatTime, formatCurrency } from '../utils/formatters';
 
+function getLocalDateValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export default function TimeTracking() {
   const [staff, setStaff] = useState([]);
   const [records, setRecords] = useState([]);
   const [capturing, setCapturing] = useState(null); // {staffId, type: 'in'|'out'}
   const [stream, setStream] = useState(null);
-  const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0,10));
+  const [filterDate, setFilterDate] = useState(getLocalDateValue());
   const [viewPhoto, setViewPhoto] = useState(null);
   const [pinPrompt, setPinPrompt] = useState(null);
   const [pinValue, setPinValue] = useState('');
@@ -82,7 +89,7 @@ export default function TimeTracking() {
     canvas.getContext('2d').drawImage(videoRef.current, 0, 0, 320, 240);
     const photo = canvas.toDataURL('image/jpeg', 0.7);
     const now = Date.now();
-    const today = new Date().toISOString().slice(0,10);
+    const today = getLocalDateValue();
 
     if (capturing.type === 'in') {
       await db.timeRecords.add({ staffId: capturing.staffId, date: today, timeIn: now, photoIn: photo, timeOut: null, photoOut: null, salaryEarned: 0 });
@@ -107,7 +114,7 @@ export default function TimeTracking() {
   const hasActiveTimeIn = (staffId) => records.some(r => r.staffId === staffId && r.timeIn && !r.timeOut);
   const attendanceStaff = staff.filter(s => s.role === 'staff' || s.role === 'manager');
 
-  const isToday = filterDate === new Date().toISOString().slice(0,10);
+  const isToday = filterDate === getLocalDateValue();
 
   return (
     <div className="animate-fade">
@@ -176,7 +183,7 @@ export default function TimeTracking() {
       )}
 
       {pinPrompt && (
-        <Modal title={`Confirm PIN â€” ${getStaffName(pinPrompt.staffId)}`} onClose={() => setPinPrompt(null)} footer={
+        <Modal title={`Confirm PIN - ${getStaffName(pinPrompt.staffId)}`} onClose={() => setPinPrompt(null)} footer={
           <>
             <button className="btn btn-secondary" onClick={() => setPinPrompt(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={confirmPin} disabled={pinValue.length !== 4}>Continue</button>
@@ -206,7 +213,7 @@ export default function TimeTracking() {
       )}
 
       {capturing && (
-        <Modal title={`Time ${capturing.type === 'in' ? 'In' : 'Out'} — ${getStaffName(capturing.staffId)}`} onClose={stopCapture} footer={
+        <Modal title={`Time ${capturing.type === 'in' ? 'In' : 'Out'} - ${getStaffName(capturing.staffId)}`} onClose={stopCapture} footer={
           <><button className="btn btn-secondary" onClick={stopCapture}>Cancel</button><button className="btn btn-primary" onClick={takePhoto}><Camera size={16} /> Capture</button></>
         }>
           <div className="webcam-container">
