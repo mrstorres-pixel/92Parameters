@@ -429,13 +429,13 @@ body {
 .pagination { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 16px; }
 
 /* Receipt */
-.receipt { background: #fff; color: #000; padding: 24px; font-family: 'Courier New', monospace; font-size: 0.8rem; max-width: 300px; margin: 0 auto; }
+.receipt { background: #fff; color: #000; padding: 20px; font-family: 'Courier New', monospace; font-size: 1rem; line-height: 1.35; max-width: 300px; margin: 0 auto; }
 .receipt-header { text-align: center; margin-bottom: 16px; border-bottom: 1px dashed #000; padding-bottom: 12px; }
-.receipt-header h3 { font-size: 1rem; font-weight: 700; }
+.receipt-header h3 { font-size: 1.1rem; font-weight: 700; }
 .receipt-line { display: flex; justify-content: space-between; margin-bottom: 4px; }
 .receipt-divider { border-top: 1px dashed #000; margin: 8px 0; }
-.receipt-total { font-weight: 700; font-size: 1rem; }
-.receipt-footer { text-align: center; margin-top: 16px; border-top: 1px dashed #000; padding-top: 12px; font-size: 0.7rem; }
+.receipt-total { font-weight: 700; font-size: 1.1rem; }
+.receipt-footer { text-align: center; margin-top: 16px; border-top: 1px dashed #000; padding-top: 12px; font-size: 0.85rem; }
 
 /* Animations */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

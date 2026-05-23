@@ -17,7 +17,7 @@ export default function ReceiptModal({ transaction, onClose }) {
 
   function handlePrint() {
     const win = window.open('', '_blank', 'width=260,height=700');
-    win.document.write('<html><head><title>Receipt</title><style>@page{size:58mm auto;margin:0}*{box-sizing:border-box}html,body{width:58mm;margin:0;padding:0;background:#fff}body{font-family:"Courier New",monospace;font-size:13px;line-height:1.3;color:#000}.receipt{width:58mm!important;max-width:58mm!important;margin:0!important;padding:3mm!important;color:#000!important;background:#fff!important;font-family:"Courier New",monospace!important;font-size:13px!important}.receipt img{max-width:24mm!important}.receipt-line{display:flex!important;justify-content:space-between!important;gap:3mm!important}.receipt-line span:first-child{min-width:0;overflow-wrap:anywhere}.receipt-divider{border-top:1px dashed #000!important;margin:2mm 0!important}@media print{html,body{width:58mm!important}.receipt{width:58mm!important;page-break-inside:avoid}button{display:none!important}}</style></head><body>');
+    win.document.write('<html><head><title>Receipt</title><style>@page{size:58mm auto;margin:0}*{box-sizing:border-box}html,body{width:58mm;margin:0;padding:0;background:#fff}body{font-family:"Courier New",monospace;font-size:16px;line-height:1.35;color:#000}.receipt{width:58mm!important;max-width:58mm!important;margin:0!important;padding:2mm!important;color:#000!important;background:#fff!important;font-family:"Courier New",monospace!important;font-size:16px!important;line-height:1.35!important}.receipt img{max-width:27mm!important}.receipt-line{display:flex!important;justify-content:space-between!important;gap:2mm!important}.receipt-line span:first-child{min-width:0;overflow-wrap:anywhere}.receipt-divider{border-top:1px dashed #000!important;margin:2mm 0!important}@media print{html,body{width:58mm!important}.receipt{width:58mm!important;page-break-inside:avoid}button{display:none!important}}</style></head><body>');
     win.document.write(ref.current.innerHTML);
     win.document.write('</body></html>');
     win.document.close();
@@ -92,19 +92,19 @@ export default function ReceiptModal({ transaction, onClose }) {
   async function handleSaveImage() {
     const width = 384;
     const padding = 18;
-    const lineHeight = 24;
+    const lineHeight = 30;
     const logo = await loadImage('/logo.png?v=2');
-    const logoWidth = logo ? 84 : 0;
+    const logoWidth = logo ? 104 : 0;
     const logoHeight = logo ? Math.round((logo.height / logo.width) * logoWidth) : 0;
     const logoBlockHeight = logo ? logoHeight + 12 : 0;
     const rows = buildReceiptRows();
     const measureCanvas = document.createElement('canvas');
     const measureCtx = measureCanvas.getContext('2d');
-    measureCtx.font = '17px "Courier New", monospace';
+    measureCtx.font = '21px "Courier New", monospace';
     const rowHeights = rows.map(row => {
       if (row.type === 'space') return 10;
       if (row.type === 'divider') return 18;
-      if (row.type === 'pair') return Math.max(1, wrapText(measureCtx, row.left, 210).length) * lineHeight;
+      if (row.type === 'pair') return Math.max(1, wrapText(measureCtx, row.left, 198).length) * lineHeight;
       return Math.max(1, wrapText(measureCtx, row.text, width - padding * 2).length) * lineHeight;
     });
     const height = padding * 2 + logoBlockHeight + rowHeights.reduce((sum, h) => sum + h, 0);
@@ -123,7 +123,7 @@ export default function ReceiptModal({ transaction, onClose }) {
       y += logoBlockHeight;
     }
     rows.forEach((row, index) => {
-      ctx.font = `${row.bold ? '700 ' : ''}17px "Courier New", monospace`;
+      ctx.font = `${row.bold ? '700 ' : ''}21px "Courier New", monospace`;
       if (row.type === 'space') {
         y += rowHeights[index];
         return;
@@ -141,7 +141,7 @@ export default function ReceiptModal({ transaction, onClose }) {
         return;
       }
       if (row.type === 'pair') {
-        const leftLines = wrapText(ctx, row.left, 210);
+        const leftLines = wrapText(ctx, row.left, 198);
         leftLines.forEach((line, lineIndex) => {
           ctx.fillText(line, padding, y);
           if (lineIndex === 0) {
@@ -179,13 +179,13 @@ export default function ReceiptModal({ transaction, onClose }) {
         <button className="btn btn-primary" onClick={handlePrint}>Print Receipt</button>
       </>
     }>
-      <div ref={ref} className="receipt" style={{ color: '#000', backgroundColor: '#fff', padding: '16px', fontFamily: '"Courier New", Courier, monospace', fontSize: '13px' }}>
+      <div ref={ref} className="receipt" style={{ color: '#000', backgroundColor: '#fff', padding: '14px', fontFamily: '"Courier New", Courier, monospace', fontSize: '16px', lineHeight: 1.35 }}>
         <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-          <img src="/logo.png?v=2" alt="92Parameters" style={{ width: '80px', height: 'auto', marginBottom: '8px' }} />
-          <div style={{ fontWeight: 'bold', fontSize: '14px' }}>92 PARAMETERS CAFE</div>
+          <img src="/logo.png?v=2" alt="92Parameters" style={{ width: '96px', height: 'auto', marginBottom: '8px' }} />
+          <div style={{ fontWeight: 'bold', fontSize: '17px' }}>92 PARAMETERS CAFE</div>
         </div>
 
-        <div style={{ textAlign: 'center', fontSize: '10px', marginBottom: '10px', lineHeight: '1.2' }}>
+        <div style={{ textAlign: 'center', fontSize: '13px', marginBottom: '10px', lineHeight: '1.25' }}>
           THIS IS NOT AN OFFICIAL RECEIPT.<br />
           PLEASE ASK FOR BIR SERVICE INVOICE
         </div>
@@ -207,7 +207,7 @@ export default function ReceiptModal({ transaction, onClose }) {
               <span>{formatReceiptCurrency(calcItemTotal(item))}</span>
             </div>
             {hasItemDiscount(item) && (
-              <div style={{ fontSize: '11px', paddingLeft: '12px', color: '#333' }}>
+              <div style={{ fontSize: '14px', paddingLeft: '12px', color: '#333' }}>
                 {Number(item.discount || 0) > 0 && (
                   <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>Discount</span>
@@ -278,7 +278,7 @@ export default function ReceiptModal({ transaction, onClose }) {
           Staff: {t.staffName || 'Staff'}
         </div>
 
-        <div style={{ textAlign: 'center', fontSize: '11px' }}>
+        <div style={{ textAlign: 'center', fontSize: '14px' }}>
           <div style={{ marginBottom: '4px' }}>--- Powered by 92Parameters ---</div>
           <div>{formatDateTime(t.datetime)}</div>
           <div style={{ marginTop: '10px', fontWeight: 'bold' }}>THANK YOU! SEE US AGAIN! :)</div>
