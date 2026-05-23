@@ -9,6 +9,7 @@ import { calcCartSubtotal, calcCartTotal } from '../utils/calculations';
 import { recordIngredientMovement, updateDailySalesSummary } from '../utils/durability';
 import { closeRunningBill, deleteRunningBill, loadOpenBills, saveRunningBill } from '../utils/runningBills';
 import { adjustIngredientStock } from '../utils/stockAdjustments';
+import { formatPaymentLabel } from '../utils/payments';
 import ProductGrid from '../components/pos/ProductGrid';
 import CartPanel from '../components/pos/CartPanel';
 import PaymentModal from '../components/pos/PaymentModal';
@@ -102,19 +103,25 @@ export default function PointOfSale() {
     setShowPayment(true);
   }
 
-  async function handlePayment(method, cashReceived) {
+  async function handlePayment(paymentLines, cashReceived) {
     if (paymentLockRef.current) return;
     paymentLockRef.current = true;
     setIsProcessingPayment(true);
     try {
       const total = calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0);
+      const cleanPaymentLines = paymentLines.map(line => ({ method: line.method, amount: Number(line.amount || 0) })).filter(line => line.amount > 0);
+      const paidTotal = cleanPaymentLines.reduce((sum, line) => sum + line.amount, 0);
+      if (paidTotal < total) throw new Error('Payment is not complete yet.');
+      if (paidTotal > total && !cleanPaymentLines.some(line => line.method === 'Cash')) throw new Error('Only cash payments can be above the amount due.');
+      const method = formatPaymentLabel(cleanPaymentLines);
       const receiptNo = generateReceiptNo();
       const currentCheckoutKey = checkoutKey || createCheckoutKey();
       const txn = {
         receiptNo, checkoutKey: currentCheckoutKey, datetime: Date.now(), orderType,
         items: cart.map(i => ({ ...i })), paymentMethod: method,
+        paymentLines: cleanPaymentLines,
         orderDiscount, orderMarkup: 0, orderDiscountAmount, orderMarkupAmount: 0, subtotal: calcCartSubtotal(cart),
-        total, cashReceived: method === 'Cash' ? cashReceived : null,
+        total, cashReceived,
         staffId: currentStaff?.id, staffName: currentStaff?.name, status: 'completed',
       };
       let transactionId;
@@ -127,7 +134,7 @@ export default function PointOfSale() {
         const message = String(error?.message || '');
         const canUseLegacyInsert = error?.code === 'PGRST204' || error?.code === '42703' || message.includes('checkoutKey');
         if (!canUseLegacyInsert) throw error;
-        const { checkoutKey: _checkoutKey, orderDiscount: _orderDiscount, orderMarkup: _orderMarkup, orderDiscountAmount: _orderDiscountAmount, orderMarkupAmount: _orderMarkupAmount, subtotal: _subtotal, ...legacyTxn } = txn;
+        const { checkoutKey: _checkoutKey, paymentLines: _paymentLines, orderDiscount: _orderDiscount, orderMarkup: _orderMarkup, orderDiscountAmount: _orderDiscountAmount, orderMarkupAmount: _orderMarkupAmount, subtotal: _subtotal, ...legacyTxn } = txn;
         transactionId = await db.transactions.add(legacyTxn);
       }
       const savedTxn = { ...txn, id: transactionId };

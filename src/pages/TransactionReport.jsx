@@ -9,6 +9,7 @@ import { formatCurrency, formatDate, formatTime, formatDateTime } from '../utils
 import { calcItemTotal } from '../utils/calculations';
 import { PAGE_SIZE, downloadJson, getDateRangeFilters, recordIngredientMovement, reverseDailySalesSummary } from '../utils/durability';
 import { adjustIngredientStock } from '../utils/stockAdjustments';
+import { buildPaymentTotals, formatPaymentLabel, normalizePaymentLines, paymentMethodMatches, PAYMENT_METHODS } from '../utils/payments';
 
 function toDateInputValue(date) {
   return date.toISOString().slice(0, 10);
@@ -75,7 +76,6 @@ export default function TransactionReport() {
   async function load() {
     const { start, end } = getRangeBounds(range, customStart, customEnd);
     const filters = getDateRangeFilters(start, end);
-    if (paymentFilter !== 'All') filters.push({ field: 'paymentMethod', op: 'eq', value: paymentFilter });
     if (statusFilter !== 'All') filters.push({ field: 'status', op: 'eq', value: statusFilter });
     if (staffFilter !== 'All') filters.push({ field: 'staffId', op: 'eq', value: Number(staffFilter) });
     setTxns(await db.transactions.query({ filters, orderBy: 'datetime', ascending: false, limit: PAGE_SIZE, offset: page * PAGE_SIZE }));
@@ -174,20 +174,16 @@ export default function TransactionReport() {
     const q = search.toLowerCase();
     return (t.receiptNo || '').toLowerCase().includes(q) ||
       (t.staffName || '').toLowerCase().includes(q) ||
-      (t.paymentMethod || '').toLowerCase().includes(q) ||
+      formatPaymentLabel(t).toLowerCase().includes(q) ||
       (t.items || []).some(item => (item.name || '').toLowerCase().includes(q));
-  });
+  }).filter(t => paymentMethodMatches(t, paymentFilter));
 
   const completed = filtered.filter(t => t.status !== 'void');
   const voided = filtered.filter(t => t.status === 'void');
   const totalSales = completed.reduce((sum, t) => sum + Number(t.total || 0), 0);
   const avgTicket = completed.length ? totalSales / completed.length : 0;
-  const paymentTotals = completed.reduce((map, t) => {
-    const method = t.paymentMethod || 'Unspecified';
-    map[method] = (map[method] || 0) + Number(t.total || 0);
-    return map;
-  }, {});
-  const paymentOptions = ['All', 'Cash', 'GCash', 'Card', 'Bank Transfer', 'Grab', 'Foodpanda'];
+  const paymentTotals = buildPaymentTotals(completed);
+  const paymentOptions = ['All', ...PAYMENT_METHODS];
 
   function exportFiltered() {
     downloadJson(`transactions-${Date.now()}.json`, {
@@ -246,10 +242,10 @@ export default function TransactionReport() {
         <div className="payment-total-grid">
           {Object.entries(paymentTotals).length === 0 ? (
             <span className="text-muted text-sm">No completed sales in this view.</span>
-          ) : Object.entries(paymentTotals).sort((a, b) => b[1] - a[1]).map(([method, amount]) => (
+          ) : Object.entries(paymentTotals).sort((a, b) => b[1].amount - a[1].amount).map(([method, totals]) => (
             <div key={method} className="payment-total-item">
               <span>{method}</span>
-              <strong>{formatCurrency(amount)}</strong>
+              <strong>{formatCurrency(totals.amount)}</strong>
             </div>
           ))}
         </div>
@@ -265,7 +261,7 @@ export default function TransactionReport() {
                 <td style={{ fontWeight: 600, color: 'var(--accent)' }}>{t.receiptNo}</td>
                 <td><span className="badge badge-neutral">{t.orderType}</span></td>
                 <td className="truncate" style={{ maxWidth: 200 }}>{(t.items||[]).map(i => `${i.name}×${i.quantity}`).join(', ')}</td>
-                <td>{t.paymentMethod}</td>
+                <td>{formatPaymentLabel(t)}</td>
                 <td>{t.staffName || '—'}</td>
                 <td style={{ fontWeight: 600 }}>{formatCurrency(t.total)}</td>
                 <td>{t.status === 'void' ? <span className="void-stamp">VOID</span> : <span className="badge badge-success">Completed</span>}</td>
@@ -304,12 +300,25 @@ export default function TransactionReport() {
           </div>
           <div className="form-row mb-16">
             <div><span className="form-label">Order Type</span><div><span className="badge badge-neutral">{selected.orderType}</span></div></div>
-            <div><span className="form-label">Payment</span><div>{selected.paymentMethod}</div></div>
+            <div><span className="form-label">Payment</span><div>{formatPaymentLabel(selected)}</div></div>
           </div>
           <div className="form-row mb-16">
             <div><span className="form-label">Staff</span><div>{selected.staffName || '—'}</div></div>
             <div><span className="form-label">Status</span><div>{selected.status === 'void' ? <span className="void-stamp">VOID</span> : <span className="badge badge-success">Completed</span>}</div></div>
           </div>
+
+          {normalizePaymentLines(selected).length > 1 && (
+            <div className="table-container" style={{ marginBottom: 16 }}>
+              <table className="data-table">
+                <thead><tr><th>Payment Method</th><th className="text-right">Amount</th></tr></thead>
+                <tbody>
+                  {normalizePaymentLines(selected).map(line => (
+                    <tr key={line.method}><td>{line.method}</td><td className="text-right">{formatCurrency(line.amount)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <h4 style={{ fontSize: '0.9rem', marginBottom: 8, color: 'var(--text-secondary)' }}>Items</h4>
           <div className="table-container" style={{ marginBottom: 16 }}>

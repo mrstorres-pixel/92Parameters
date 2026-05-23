@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import Modal from '../common/Modal';
 import { formatDateTime } from '../../utils/formatters';
 import { calcItemTotal } from '../../utils/calculations';
+import { formatPaymentLabel, normalizePaymentLines } from '../../utils/payments';
 
 function hasItemDiscount(item) {
   return Number(item.discount || 0) > 0 || Number(item.discountAmount || 0) > 0;
@@ -14,6 +15,9 @@ function formatReceiptCurrency(amount) {
 export default function ReceiptModal({ transaction, onClose }) {
   const ref = useRef();
   const t = transaction;
+  const paymentLines = normalizePaymentLines(t);
+  const paidTotal = paymentLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  const changeDue = Math.max(0, paidTotal - Number(t.total || 0));
 
   function handlePrint() {
     const win = window.open('', '_blank', 'width=260,height=700');
@@ -49,12 +53,16 @@ export default function ReceiptModal({ transaction, onClose }) {
     }
 
     rows.push({ type: 'pair', left: 'Total:', right: formatReceiptCurrency(t.total), bold: true });
-    if (t.cashReceived) {
-      rows.push({ type: 'pair', left: 'Cash Received:', right: formatReceiptCurrency(t.cashReceived) });
-      rows.push({ type: 'pair', left: 'Change:', right: formatReceiptCurrency(t.cashReceived - t.total), bold: true });
+    if (paymentLines.length > 1) {
+      paymentLines.forEach(line => rows.push({ type: 'pair', left: line.method, right: formatReceiptCurrency(line.amount) }));
+    } else if (paymentLines[0]?.method === 'Cash' && paidTotal > t.total) {
+      rows.push({ type: 'pair', left: 'Cash Received:', right: formatReceiptCurrency(paidTotal) });
+    }
+    if (changeDue > 0) {
+      rows.push({ type: 'pair', left: 'Change:', right: formatReceiptCurrency(changeDue), bold: true });
     }
     rows.push({ type: 'space' });
-    rows.push({ type: 'text', text: `Payment Method: ${t.paymentMethod}` });
+    rows.push({ type: 'text', text: `Payment Method: ${formatPaymentLabel(paymentLines)}` });
     rows.push({ type: 'text', text: t.orderType });
     rows.push({ type: 'text', text: `Staff: ${t.staffName || 'Staff'}` });
     rows.push({ type: 'space' });
@@ -255,22 +263,30 @@ export default function ReceiptModal({ transaction, onClose }) {
             <span style={{ fontWeight: 'bold' }}>Total:</span>
             <span style={{ fontWeight: 'bold' }}>{formatReceiptCurrency(t.total)}</span>
           </div>
-          {t.cashReceived && (
+          {paymentLines.length > 1 && paymentLines.map(line => (
+            <div key={line.method} className="receipt-line" style={{ display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>
+              <span>{line.method}:</span>
+              <span>{formatReceiptCurrency(line.amount)}</span>
+            </div>
+          ))}
+          {paymentLines.length === 1 && paymentLines[0]?.method === 'Cash' && paidTotal > t.total && (
+            <div className="receipt-line" style={{ display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>
+              <span>Cash Received:</span>
+              <span>{formatReceiptCurrency(paidTotal)}</span>
+            </div>
+          )}
+          {changeDue > 0 && (
             <>
               <div className="receipt-line" style={{ display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>
-                <span>Cash Received:</span>
-                <span>{formatReceiptCurrency(t.cashReceived)}</span>
-              </div>
-              <div className="receipt-line" style={{ display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>
                 <span style={{ fontWeight: 'bold' }}>Change:</span>
-                <span style={{ fontWeight: 'bold' }}>{formatReceiptCurrency(t.cashReceived - t.total)}</span>
+                <span style={{ fontWeight: 'bold' }}>{formatReceiptCurrency(changeDue)}</span>
               </div>
             </>
           )}
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          Payment Method: {t.paymentMethod}<br />
+          Payment Method: {formatPaymentLabel(paymentLines)}<br />
           {t.orderType}
         </div>
 

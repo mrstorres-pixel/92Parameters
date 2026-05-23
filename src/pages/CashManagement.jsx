@@ -5,6 +5,7 @@ import Modal from '../components/common/Modal';
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
+import { sumPaymentMethod } from '../utils/payments';
 
 function toDateInputValue(date) {
   return date.toISOString().slice(0, 10);
@@ -37,7 +38,6 @@ export default function CashManagement() {
         filters: [
           { field: 'datetime', op: 'gte', value: start },
           { field: 'datetime', op: 'lte', value: end },
-          { field: 'paymentMethod', op: 'eq', value: 'Cash' },
           { field: 'status', op: 'eq', value: 'completed' },
         ],
         orderBy: 'datetime',
@@ -60,7 +60,7 @@ export default function CashManagement() {
 
   const totalIn = entries.filter(e => e.type === 'in').reduce((s,e) => s + e.amount, 0);
   const totalOut = entries.filter(e => e.type === 'out').reduce((s,e) => s + e.amount, 0);
-  const cashSalesTotal = cashSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const cashSalesTotal = cashSales.reduce((sum, sale) => sum + sumPaymentMethod(sale, 'Cash'), 0);
   const expectedCash = totalIn + cashSalesTotal - totalOut;
 
   return (
@@ -82,7 +82,7 @@ export default function CashManagement() {
       </div>
 
       <div className="alert-banner alert-info mb-24">
-        <span>Expected Cash = cash sales paid in Cash + manual cash in - manual cash out. It does not count GCash, Grab, Foodpanda, card, or bank transfer sales.</span>
+        <span>Expected Cash = cash portions of completed sales + manual cash in - manual cash out. Split payments only add the cash portion to the drawer.</span>
       </div>
 
       <div className="table-container">

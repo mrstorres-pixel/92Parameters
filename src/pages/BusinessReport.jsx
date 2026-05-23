@@ -4,6 +4,7 @@ import db from '../db/database';
 import { formatCurrency } from '../utils/formatters';
 import { calcGrossProfit, calcItemTotal } from '../utils/calculations';
 import { getDateRangeFilters } from '../utils/durability';
+import { buildPaymentTotals, PAYMENT_METHODS, paymentMethodMatches } from '../utils/payments';
 
 const COLORS = ['#d4982a', '#f59e0b', '#34d399', '#60a5fa', '#a78bfa', '#f87171'];
 
@@ -63,8 +64,8 @@ export default function BusinessReport() {
   const { start, end } = getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackUnit);
 
   const validAll = txns.filter(t => t.status !== 'void');
-  const paymentMethods = ['All', ...Array.from(new Set(validAll.map(t => t.paymentMethod || 'Unspecified'))).sort((a, b) => a.localeCompare(b))];
-  const valid = validAll.filter(t => paymentFilter === 'All' || (t.paymentMethod || 'Unspecified') === paymentFilter);
+  const paymentMethods = ['All', ...PAYMENT_METHODS];
+  const valid = validAll.filter(t => paymentMethodMatches(t, paymentFilter));
   const totalSales = valid.reduce((s,t) => s + (t.total || 0), 0);
   const avgTicket = valid.length ? totalSales / valid.length : 0;
   const totalItems = valid.reduce((s,t) => s + (t.items || []).reduce((a,i) => a + i.quantity, 0), 0);
@@ -93,14 +94,7 @@ export default function BusinessReport() {
   })).sort((a, b) => b.grossSales - a.grossSales);
 
   // Payment breakdown
-  const payMap = {};
-  const payQtyMap = {};
-  validAll.forEach(t => {
-    const method = t.paymentMethod || 'Unspecified';
-    payMap[method] = (payMap[method] || 0) + t.total;
-    payQtyMap[method] = (payQtyMap[method] || 0) + 1;
-  });
-  const payRows = Object.entries(payMap).map(([name, value]) => ({ name, quantity: payQtyMap[name] || 0, value })).sort((a, b) => b.value - a.value);
+  const payRows = Object.entries(buildPaymentTotals(validAll)).map(([name, totals]) => ({ name, quantity: totals.quantity, value: totals.amount })).sort((a, b) => b.value - a.value);
   const payData = payRows.map(({ name, value }) => ({ name, value: Math.round(value) }));
   const payTotalQty = payRows.reduce((sum, row) => sum + row.quantity, 0);
   const payTotalAmount = payRows.reduce((sum, row) => sum + row.value, 0);

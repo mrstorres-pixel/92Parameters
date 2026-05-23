@@ -341,6 +341,10 @@ body {
 .payment-method.selected { border-color: var(--accent); background: var(--accent-glow); }
 .payment-method svg { margin-bottom: 6px; }
 .payment-method span { display: block; font-size: 0.8rem; font-weight: 600; }
+.payment-split-row {
+  display: grid; grid-template-columns: minmax(120px, 1fr) 160px; gap: 12px; align-items: center;
+  padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card);
+}
 
 /* PIN Pad */
 .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 320px; margin: 0 auto; }
@@ -683,6 +687,9 @@ body {
   .payment-method span {
     font-size: 0.75rem;
     overflow-wrap: anywhere;
+  }
+  .payment-split-row {
+    grid-template-columns: 1fr;
   }
   .payment-total-item {
     align-items: flex-start;

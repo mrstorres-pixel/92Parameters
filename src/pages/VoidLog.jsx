@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import db from '../db/database';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
 import { PAGE_SIZE } from '../utils/durability';
+import { formatPaymentLabel } from '../utils/payments';
 
 export default function VoidLog() {
   const [voids, setVoids] = useState([]);
@@ -44,7 +45,7 @@ export default function VoidLog() {
                         <div className="form-row mb-16">
                           <div><span className="form-label">Original Date</span><div>{formatDateTime(v.originalData.datetime)}</div></div>
                           <div><span className="form-label">Order Type</span><div>{v.originalData.orderType}</div></div>
-                          <div><span className="form-label">Payment</span><div>{v.originalData.paymentMethod}</div></div>
+                          <div><span className="form-label">Payment</span><div>{formatPaymentLabel(v.originalData)}</div></div>
                           <div><span className="form-label">Staff</span><div>{v.originalData.staffName}</div></div>
                         </div>
                         <h4 style={{ marginBottom: 8, color: 'var(--text-secondary)' }}>Items</h4>
