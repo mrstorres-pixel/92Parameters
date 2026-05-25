@@ -66,6 +66,7 @@ export default function BusinessReport() {
   const validAll = txns.filter(t => t.status !== 'void');
   const paymentMethods = ['All', ...PAYMENT_METHODS];
   const valid = validAll.filter(t => paymentMethodMatches(t, paymentFilter));
+  const filteredStats = calcGrossProfit(valid);
   const totalSales = valid.reduce((s,t) => s + (t.total || 0), 0);
   const avgTicket = valid.length ? totalSales / valid.length : 0;
   const totalItems = valid.reduce((s,t) => s + (t.items || []).reduce((a,i) => a + i.quantity, 0), 0);
@@ -159,8 +160,8 @@ export default function BusinessReport() {
         <div className="stat-card"><div className="stat-label">Transactions</div><div className="stat-value">{valid.length}</div></div>
         <div className="stat-card"><div className="stat-label">Avg Ticket</div><div className="stat-value">{formatCurrency(avgTicket)}</div></div>
         <div className="stat-card"><div className="stat-label">Items Sold</div><div className="stat-value">{totalItems}</div></div>
-        <div className="stat-card"><div className="stat-label">Cost of Goods</div><div className="stat-value">{formatCurrency(stats.cost)}</div></div>
-        <div className="stat-card"><div className="stat-label">Gross Profit</div><div className="stat-value" style={{ color: 'var(--success)' }}>{formatCurrency(stats.profit)}</div></div>
+        <div className="stat-card"><div className="stat-label">Cost of Goods</div><div className="stat-value">{formatCurrency(filteredStats.cost)}</div></div>
+        <div className="stat-card"><div className="stat-label">Gross Profit</div><div className="stat-value" style={{ color: 'var(--success)' }}>{formatCurrency(filteredStats.profit)}</div></div>
       </div>
 
       <div className="report-grid">
@@ -169,8 +170,8 @@ export default function BusinessReport() {
           <table className="summary-table">
             <tbody>
               <tr><th>Total Sales</th><td>{formatCurrency(totalSales)}</td></tr>
-              <tr><th>Total Cost</th><td>{formatCurrency(stats.cost)}</td></tr>
-              <tr><th>Gross Profit</th><td>{formatCurrency(stats.profit)}</td></tr>
+              <tr><th>Total Cost</th><td>{formatCurrency(filteredStats.cost)}</td></tr>
+              <tr><th>Gross Profit</th><td>{formatCurrency(filteredStats.profit)}</td></tr>
               <tr><th>Transactions</th><td>{valid.length}</td></tr>
               <tr><th>Items Sold</th><td>{totalItems}</td></tr>
               <tr><th>Average Ticket</th><td>{formatCurrency(avgTicket)}</td></tr>
@@ -210,8 +211,8 @@ export default function BusinessReport() {
               <td data-label="Tab" style={{ fontWeight: 700 }}>Total</td>
               <td data-label="Quantity Sold" style={{ fontWeight: 700 }}>{totalItems}</td>
               <td data-label="Gross Sales" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(totalSales)}</td>
-              <td data-label="Cost" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(stats.cost)}</td>
-              <td data-label="Net Sales" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(stats.profit)}</td>
+              <td data-label="Cost" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(filteredStats.cost)}</td>
+              <td data-label="Net Sales" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(filteredStats.profit)}</td>
             </tr>
           </tbody>
         </table>
