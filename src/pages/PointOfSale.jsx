@@ -113,13 +113,17 @@ export default function PointOfSale() {
       const paidTotal = cleanPaymentLines.reduce((sum, line) => sum + line.amount, 0);
       if (paidTotal < total) throw new Error('Payment is not complete yet.');
       if (paidTotal > total && !cleanPaymentLines.some(line => line.method === 'Cash')) throw new Error('Only cash payments can be above the amount due.');
-      const method = formatPaymentLabel(cleanPaymentLines);
+      const changeDue = Math.max(0, paidTotal - total);
+      const appliedPaymentLines = cleanPaymentLines
+        .map(line => line.method === 'Cash' ? { ...line, amount: Math.max(0, line.amount - changeDue) } : line)
+        .filter(line => line.amount > 0);
+      const method = formatPaymentLabel(appliedPaymentLines);
       const receiptNo = generateReceiptNo();
       const currentCheckoutKey = checkoutKey || createCheckoutKey();
       const txn = {
         receiptNo, checkoutKey: currentCheckoutKey, datetime: Date.now(), orderType,
         items: cart.map(i => ({ ...i })), paymentMethod: method,
-        paymentLines: cleanPaymentLines,
+        paymentLines: appliedPaymentLines,
         orderDiscount, orderMarkup: 0, orderDiscountAmount, orderMarkupAmount: 0, subtotal: calcCartSubtotal(cart),
         total, cashReceived,
         staffId: currentStaff?.id, staffName: currentStaff?.name, status: 'completed',

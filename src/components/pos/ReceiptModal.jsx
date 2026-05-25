@@ -17,7 +17,10 @@ export default function ReceiptModal({ transaction, onClose }) {
   const t = transaction;
   const paymentLines = normalizePaymentLines(t);
   const paidTotal = paymentLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
-  const changeDue = Math.max(0, paidTotal - Number(t.total || 0));
+  const cashApplied = paymentLines.filter(line => line.method === 'Cash').reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  const cashReceived = Number(t.cashReceived || 0);
+  const displayPaidTotal = paidTotal - cashApplied + (cashReceived || cashApplied);
+  const changeDue = Math.max(0, displayPaidTotal - Number(t.total || 0));
 
   function handlePrint() {
     const win = window.open('', '_blank', 'width=260,height=700');
@@ -55,8 +58,9 @@ export default function ReceiptModal({ transaction, onClose }) {
     rows.push({ type: 'pair', left: 'Total:', right: formatReceiptCurrency(t.total), bold: true });
     if (paymentLines.length > 1) {
       paymentLines.forEach(line => rows.push({ type: 'pair', left: line.method, right: formatReceiptCurrency(line.amount) }));
-    } else if (paymentLines[0]?.method === 'Cash' && paidTotal > t.total) {
-      rows.push({ type: 'pair', left: 'Cash Received:', right: formatReceiptCurrency(paidTotal) });
+    }
+    if (cashReceived > cashApplied) {
+      rows.push({ type: 'pair', left: 'Cash Received:', right: formatReceiptCurrency(cashReceived) });
     }
     if (changeDue > 0) {
       rows.push({ type: 'pair', left: 'Change:', right: formatReceiptCurrency(changeDue), bold: true });
@@ -269,10 +273,10 @@ export default function ReceiptModal({ transaction, onClose }) {
               <span>{formatReceiptCurrency(line.amount)}</span>
             </div>
           ))}
-          {paymentLines.length === 1 && paymentLines[0]?.method === 'Cash' && paidTotal > t.total && (
+          {cashReceived > cashApplied && (
             <div className="receipt-line" style={{ display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>
               <span>Cash Received:</span>
-              <span>{formatReceiptCurrency(paidTotal)}</span>
+              <span>{formatReceiptCurrency(cashReceived)}</span>
             </div>
           )}
           {changeDue > 0 && (
