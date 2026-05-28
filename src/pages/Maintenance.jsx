@@ -7,6 +7,8 @@ import { formatCurrency, formatDateTime } from '../utils/formatters';
 
 const TABLES = [
   ['staff', db.staff],
+  ['customers', db.customers],
+  ['loyaltyTransactions', db.loyaltyTransactions],
   ['products', db.products],
   ['inventory', db.inventory],
   ['ingredients', db.ingredients],

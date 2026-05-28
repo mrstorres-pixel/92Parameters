@@ -345,6 +345,16 @@ body {
   display: grid; grid-template-columns: minmax(120px, 1fr) 160px; gap: 12px; align-items: center;
   padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card);
 }
+.membership-card {
+  display: flex; align-items: center; gap: 12px; padding: 14px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, rgba(212,152,42,0.16), var(--bg-card));
+}
+.loyalty-panel {
+  display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--bg-secondary);
+}
+.loyalty-member-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
 /* PIN Pad */
 .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 320px; margin: 0 auto; }

@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingCart, Package, Warehouse, Leaf, Clock, DollarSign, BarChart3, Receipt, Ban, History, Users, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Warehouse, Leaf, Clock, DollarSign, BarChart3, Receipt, Ban, History, Users, ShieldCheck, CreditCard } from 'lucide-react';
 
 export const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['cashier', 'manager', 'owner'] },
@@ -11,6 +11,7 @@ export const navItems = [
   { to: '/ingredients', icon: Leaf, label: 'Ingredients', roles: ['owner'] },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['owner'] },
   { to: '/voids', icon: Ban, label: 'Void Log', roles: ['manager', 'owner'] },
+  { to: '/customers', icon: CreditCard, label: 'Membership', roles: ['cashier', 'manager', 'owner'] },
   { to: '/staff', icon: Users, label: 'Staff Management', roles: ['owner'] },
   { to: '/audit', icon: History, label: 'Audit Log', roles: ['owner'] },
   { to: '/maintenance', icon: ShieldCheck, label: 'Maintenance', roles: ['owner'] },

@@ -4,10 +4,11 @@ import { usePosStore } from '../../stores/posStore';
 import { formatCurrency } from '../../utils/formatters';
 import { calcItemTotal, calcCartTotal, calcCartSubtotal, calcItemAdjustedPrice } from '../../utils/calculations';
 
-export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBill, checkoutDisabled = false }) {
+export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBill, checkoutDisabled = false, loyaltyDiscount = 0, loyaltyCustomer = null }) {
   const { cart, orderType, orderDiscount, orderDiscountAmount, setOrderType, setOrderDiscount, setOrderDiscountAmount, updateQuantity, removeItem, setDiscount, setMarkup, setCustomPrice, clearCart } = usePosStore();
   const subtotal = calcCartSubtotal(cart);
-  const total = calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0);
+  const orderTotal = calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0);
+  const total = Math.max(0, orderTotal - Number(loyaltyDiscount || 0));
   const [customDiscountItem, setCustomDiscountItem] = useState(null);
   const [customMarkupItem, setCustomMarkupItem] = useState(null);
   const [customVal, setCustomVal] = useState('');
@@ -145,6 +146,12 @@ export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBil
           <span>Total</span>
           <span>{formatCurrency(total)}</span>
         </div>
+        {loyaltyCustomer && loyaltyDiscount > 0 && (
+          <div className="payment-total-item mb-16">
+            <span>Loyalty discount</span>
+            <strong>-{formatCurrency(loyaltyDiscount)}</strong>
+          </div>
+        )}
         <div className="flex gap-8 mb-16">
           <button className="btn btn-secondary w-full" disabled={cart.length === 0} onClick={onSaveBill}>
             {activeBill ? 'Update Tab' : 'Save Tab'}

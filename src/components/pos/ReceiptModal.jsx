@@ -54,6 +54,9 @@ export default function ReceiptModal({ transaction, onClose }) {
       if (t.orderDiscount > 0) rows.push({ type: 'pair', left: 'Order Discount', right: `-${t.orderDiscount}%` });
       if (t.orderDiscountAmount > 0) rows.push({ type: 'pair', left: 'Order Discount Cash', right: `-${formatReceiptCurrency(t.orderDiscountAmount)}` });
     }
+    if (Number(t.loyaltyDiscount || 0) > 0) {
+      rows.push({ type: 'pair', left: 'Loyalty Discount', right: `-${formatReceiptCurrency(t.loyaltyDiscount)}` });
+    }
 
     rows.push({ type: 'pair', left: 'Total:', right: formatReceiptCurrency(t.total), bold: true });
     if (paymentLines.length > 1) {
@@ -69,6 +72,12 @@ export default function ReceiptModal({ transaction, onClose }) {
     rows.push({ type: 'text', text: `Payment Method: ${formatPaymentLabel(paymentLines)}` });
     rows.push({ type: 'text', text: t.orderType });
     rows.push({ type: 'text', text: `Staff: ${t.staffName || 'Staff'}` });
+    if (t.customerName) {
+      rows.push({ type: 'space' });
+      rows.push({ type: 'text', text: `Member: ${t.customerName}` });
+      if (Number(t.loyaltyEarned || 0) > 0) rows.push({ type: 'text', text: `Points Earned: ${t.loyaltyEarned}` });
+      if (Number(t.loyaltyRedeemed || 0) > 0) rows.push({ type: 'text', text: `Points Redeemed: ${t.loyaltyRedeemed}` });
+    }
     rows.push({ type: 'space' });
     rows.push({ type: 'center', text: '--- Powered by 92Parameters ---' });
     rows.push({ type: 'center', text: formatDateTime(t.datetime) });
@@ -261,6 +270,12 @@ export default function ReceiptModal({ transaction, onClose }) {
             )}
           </div>
         )}
+        {Number(t.loyaltyDiscount || 0) > 0 && (
+          <div className="receipt-line" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span>Loyalty Discount</span>
+            <span>-{formatReceiptCurrency(t.loyaltyDiscount)}</span>
+          </div>
+        )}
 
         <div style={{ textAlign: 'right', marginBottom: '15px' }}>
           <div className="receipt-line" style={{ display: 'flex', justifyContent: 'flex-end', gap: '20px' }}>
@@ -297,6 +312,14 @@ export default function ReceiptModal({ transaction, onClose }) {
         <div style={{ marginBottom: '15px' }}>
           Staff: {t.staffName || 'Staff'}
         </div>
+
+        {t.customerName && (
+          <div style={{ marginBottom: '15px' }}>
+            Member: {t.customerName}<br />
+            {Number(t.loyaltyEarned || 0) > 0 && <>Points Earned: {t.loyaltyEarned}<br /></>}
+            {Number(t.loyaltyRedeemed || 0) > 0 && <>Points Redeemed: {t.loyaltyRedeemed}<br /></>}
+          </div>
+        )}
 
         <div style={{ textAlign: 'center', fontSize: '14px' }}>
           <div style={{ marginBottom: '4px' }}>--- Powered by 92Parameters ---</div>

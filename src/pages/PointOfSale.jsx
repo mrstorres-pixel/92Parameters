@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Search, Clock } from 'lucide-react';
+import { Search, Clock, CreditCard, X } from 'lucide-react';
 import db from '../db/database';
 import { usePosStore } from '../stores/posStore';
 import { useAuthStore } from '../stores/authStore';
@@ -10,6 +10,7 @@ import { recordIngredientMovement, updateDailySalesSummary } from '../utils/dura
 import { closeRunningBill, deleteRunningBill, loadOpenBills, saveRunningBill } from '../utils/runningBills';
 import { adjustIngredientStock } from '../utils/stockAdjustments';
 import { formatPaymentLabel } from '../utils/payments';
+import { calculateEarnedPoints, calculateRedeemPoints, getRedeemableAmount, writeLoyaltyTransaction } from '../utils/loyalty';
 import ProductGrid from '../components/pos/ProductGrid';
 import CartPanel from '../components/pos/CartPanel';
 import PaymentModal from '../components/pos/PaymentModal';
@@ -25,6 +26,10 @@ export default function PointOfSale() {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [checkoutKey, setCheckoutKey] = useState(null);
   const [receipt, setReceipt] = useState(null);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerResults, setCustomerResults] = useState([]);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [loyaltyRedeemAmount, setLoyaltyRedeemAmount] = useState('');
   const [runningBills, setRunningBills] = useState([]);
   const [activeBill, setActiveBill] = useState(null);
   const { cart, orderType, orderDiscount, orderDiscountAmount, addItem, clearCart, setCart } = usePosStore();
@@ -46,6 +51,36 @@ export default function PointOfSale() {
 
   async function refreshBills() {
     setRunningBills(await loadOpenBills());
+  }
+
+  async function searchCustomers(query) {
+    setCustomerSearch(query);
+    if (!query.trim()) {
+      setCustomerResults([]);
+      return;
+    }
+    const q = query.trim();
+    const [byCode, byName, byPhone] = await Promise.all([
+      db.customers.query({ filters: [{ field: 'memberCode', op: 'ilike', value: `%${q}%` }], limit: 5 }),
+      db.customers.query({ filters: [{ field: 'name', op: 'ilike', value: `%${q}%` }], limit: 5 }),
+      db.customers.query({ filters: [{ field: 'phone', op: 'ilike', value: `%${q}%` }], limit: 5 }),
+    ]);
+    const unique = [...byCode, ...byName, ...byPhone].filter((customer, index, arr) => arr.findIndex(c => c.id === customer.id) === index);
+    setCustomerResults(unique.filter(customer => customer.status !== 'inactive').slice(0, 8));
+  }
+
+  function selectCustomer(customer) {
+    setSelectedCustomer(customer);
+    setCustomerSearch('');
+    setCustomerResults([]);
+    setLoyaltyRedeemAmount('');
+  }
+
+  function clearCustomer() {
+    setSelectedCustomer(null);
+    setCustomerSearch('');
+    setCustomerResults([]);
+    setLoyaltyRedeemAmount('');
   }
 
   async function saveBill() {
@@ -108,7 +143,12 @@ export default function PointOfSale() {
     paymentLockRef.current = true;
     setIsProcessingPayment(true);
     try {
-      const total = calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0);
+      const orderTotal = calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0);
+      const maxLoyaltyDiscount = selectedCustomer ? getRedeemableAmount(selectedCustomer, orderTotal) : 0;
+      const loyaltyDiscount = Math.min(maxLoyaltyDiscount, Math.max(0, Number(loyaltyRedeemAmount || 0)));
+      const loyaltyRedeemed = calculateRedeemPoints(loyaltyDiscount);
+      const total = Math.max(0, orderTotal - loyaltyDiscount);
+      const loyaltyEarned = selectedCustomer ? calculateEarnedPoints(total) : 0;
       const cleanPaymentLines = paymentLines.map(line => ({ method: line.method, amount: Number(line.amount || 0) })).filter(line => line.amount > 0);
       const paidTotal = cleanPaymentLines.reduce((sum, line) => sum + line.amount, 0);
       if (paidTotal < total) throw new Error('Payment is not complete yet.');
@@ -117,7 +157,7 @@ export default function PointOfSale() {
       const appliedPaymentLines = cleanPaymentLines
         .map(line => line.method === 'Cash' ? { ...line, amount: Math.max(0, line.amount - changeDue) } : line)
         .filter(line => line.amount > 0);
-      const method = formatPaymentLabel(appliedPaymentLines);
+      const method = appliedPaymentLines.length ? formatPaymentLabel(appliedPaymentLines) : 'Loyalty';
       const receiptNo = generateReceiptNo();
       const currentCheckoutKey = checkoutKey || createCheckoutKey();
       const txn = {
@@ -125,6 +165,8 @@ export default function PointOfSale() {
         items: cart.map(i => ({ ...i })), paymentMethod: method,
         paymentLines: appliedPaymentLines,
         orderDiscount, orderMarkup: 0, orderDiscountAmount, orderMarkupAmount: 0, subtotal: calcCartSubtotal(cart),
+        customerId: selectedCustomer?.id || null, customerName: selectedCustomer?.name || null, memberCode: selectedCustomer?.memberCode || null,
+        loyaltyEarned, loyaltyRedeemed, loyaltyDiscount,
         total, cashReceived,
         staffId: currentStaff?.id, staffName: currentStaff?.name, status: 'completed',
       };
@@ -138,11 +180,40 @@ export default function PointOfSale() {
         const message = String(error?.message || '');
         const canUseLegacyInsert = error?.code === 'PGRST204' || error?.code === '42703' || message.includes('checkoutKey');
         if (!canUseLegacyInsert) throw error;
-        const { checkoutKey: _checkoutKey, paymentLines: _paymentLines, orderDiscount: _orderDiscount, orderMarkup: _orderMarkup, orderDiscountAmount: _orderDiscountAmount, orderMarkupAmount: _orderMarkupAmount, subtotal: _subtotal, ...legacyTxn } = txn;
+        if (selectedCustomer) {
+          throw new Error('Membership database migration is required before charging member sales.');
+        }
+        const { checkoutKey: _checkoutKey, paymentLines: _paymentLines, customerId: _customerId, customerName: _customerName, memberCode: _memberCode, loyaltyEarned: _loyaltyEarned, loyaltyRedeemed: _loyaltyRedeemed, loyaltyDiscount: _loyaltyDiscount, orderDiscount: _orderDiscount, orderMarkup: _orderMarkup, orderDiscountAmount: _orderDiscountAmount, orderMarkupAmount: _orderMarkupAmount, subtotal: _subtotal, ...legacyTxn } = txn;
         transactionId = await db.transactions.add(legacyTxn);
       }
       const savedTxn = { ...txn, id: transactionId };
       const summaryUpdated = await updateDailySalesSummary(savedTxn);
+      if (selectedCustomer && (loyaltyEarned || loyaltyRedeemed)) {
+        if (loyaltyRedeemed) {
+          await writeLoyaltyTransaction({
+            customer: selectedCustomer,
+            transactionId,
+            receiptNo,
+            type: 'REDEEM',
+            points: -loyaltyRedeemed,
+            amount: loyaltyDiscount,
+            details: `Redeemed ${loyaltyRedeemed} points for ${formatCurrency(loyaltyDiscount)} discount`,
+            staff: currentStaff,
+          });
+        }
+        if (loyaltyEarned) {
+          await writeLoyaltyTransaction({
+            customer: selectedCustomer,
+            transactionId,
+            receiptNo,
+            type: 'EARN',
+            points: loyaltyEarned,
+            amount: total,
+            details: `Earned from sale ${receiptNo}`,
+            staff: currentStaff,
+          });
+        }
+      }
       if (activeBill) await closeRunningBill(activeBill.id, transactionId);
 
       // Deduct ingredients
@@ -203,6 +274,7 @@ export default function PointOfSale() {
       setCheckoutKey(null);
       clearCart();
       setActiveBill(null);
+      clearCustomer();
       refreshBills();
       toast(summaryUpdated ? 'Transaction completed!' : 'Transaction completed, but summary update failed. Check Maintenance.', summaryUpdated ? 'success' : 'error');
     } catch (error) {
@@ -258,11 +330,55 @@ export default function PointOfSale() {
               ))}
             </div>
           )}
+          <div className="loyalty-panel">
+            <div className="loyalty-member-row">
+              <div className="text-sm text-muted" style={{ fontWeight: 700, textTransform: 'uppercase' }}><CreditCard size={14} /> Member</div>
+              {selectedCustomer && <button className="btn btn-ghost btn-sm" onClick={clearCustomer}><X size={14} /> Remove</button>}
+            </div>
+            {selectedCustomer ? (
+              <div style={{ display: 'grid', gap: 8 }}>
+                <div className="flex-between">
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{selectedCustomer.name}</div>
+                    <div className="text-muted text-sm">{selectedCustomer.memberCode} · {selectedCustomer.pointsBalance || 0} pts</div>
+                  </div>
+                  <span className="badge badge-success">Active</span>
+                </div>
+                <div className="form-row">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Redeem PHP</label>
+                    <input className="form-input" type="number" min="0" max={getRedeemableAmount(selectedCustomer, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0))} value={loyaltyRedeemAmount} onChange={e => setLoyaltyRedeemAmount(e.target.value)} placeholder="0" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Available</label>
+                    <div className="form-input" style={{ background: 'var(--bg-card)' }}>{formatCurrency(getRedeemableAmount(selectedCustomer, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0)))}</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ position: 'relative' }}>
+                <div className="search-bar" style={{ maxWidth: '100%', width: '100%' }}>
+                  <Search size={16} />
+                  <input placeholder="Scan card or search member..." value={customerSearch} onChange={e => searchCustomers(e.target.value)} />
+                </div>
+                {customerResults.length > 0 && (
+                  <div className="card" style={{ position: 'absolute', left: 0, right: 0, top: 'calc(100% + 6px)', zIndex: 20, padding: 8 }}>
+                    {customerResults.map(customer => (
+                      <button key={customer.id} className="btn btn-ghost w-full" style={{ justifyContent: 'space-between' }} onClick={() => selectCustomer(customer)}>
+                        <span>{customer.name}</span>
+                        <span className="text-muted text-sm">{customer.pointsBalance || 0} pts</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <ProductGrid products={products} category={category} subCategory={subCategory} searchQuery={search} onAdd={addItem} />
       </div>
-      <CartPanel onCharge={openPayment} activeBill={activeBill} onSaveBill={saveBill} onCloseBill={closeBill} checkoutDisabled={showPayment || isProcessingPayment} />
-      {showPayment && <PaymentModal total={calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0)} onConfirm={handlePayment} onClose={() => { if (!isProcessingPayment) setShowPayment(false); }} isProcessing={isProcessingPayment} />}
+      <CartPanel onCharge={openPayment} activeBill={activeBill} onSaveBill={saveBill} onCloseBill={closeBill} checkoutDisabled={showPayment || isProcessingPayment} loyaltyCustomer={selectedCustomer} loyaltyDiscount={Math.min(selectedCustomer ? getRedeemableAmount(selectedCustomer, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0)) : 0, Math.max(0, Number(loyaltyRedeemAmount || 0)))} />
+      {showPayment && <PaymentModal total={Math.max(0, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0) - Math.min(selectedCustomer ? getRedeemableAmount(selectedCustomer, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0)) : 0, Math.max(0, Number(loyaltyRedeemAmount || 0))))} onConfirm={handlePayment} onClose={() => { if (!isProcessingPayment) setShowPayment(false); }} isProcessing={isProcessingPayment} />}
       {receipt && <ReceiptModal transaction={receipt} onClose={() => setReceipt(null)} />}
     </div>
   );

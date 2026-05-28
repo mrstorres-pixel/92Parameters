@@ -16,6 +16,7 @@ import BusinessReport from './pages/BusinessReport';
 import TransactionReport from './pages/TransactionReport';
 import VoidLog from './pages/VoidLog';
 import StaffManagement from './pages/StaffManagement';
+import CustomerMembership from './pages/CustomerMembership';
 import AuditLog from './pages/AuditLog';
 import Maintenance from './pages/Maintenance';
 
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/transactions" element={<TransactionReport />} />
             <Route path="/voids" element={<VoidLog />} />
             <Route path="/staff" element={<StaffManagement />} />
+            <Route path="/customers" element={<CustomerMembership />} />
             <Route path="/audit" element={<AuditLog />} />
             <Route path="/maintenance" element={<Maintenance />} />
           </Route>

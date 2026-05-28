@@ -10,6 +10,7 @@ import { calcItemTotal } from '../utils/calculations';
 import { PAGE_SIZE, downloadJson, getDateRangeFilters, recordIngredientMovement, reverseDailySalesSummary } from '../utils/durability';
 import { adjustIngredientStock } from '../utils/stockAdjustments';
 import { buildPaymentTotals, formatPaymentLabel, normalizePaymentLines, paymentMethodMatches, PAYMENT_METHODS } from '../utils/payments';
+import { reverseLoyaltyForTransaction } from '../utils/loyalty';
 
 function toDateInputValue(date) {
   return date.toISOString().slice(0, 10);
@@ -131,6 +132,7 @@ export default function TransactionReport() {
         originalData: JSON.parse(JSON.stringify(txn)),
       });
       await reverseDailySalesSummary(txn);
+      await reverseLoyaltyForTransaction(txn, manager, 'voided transaction');
       await restoreTransactionIngredients(txn, manager, 'voided');
       toast('Transaction voided');
       setShowVoid(null); setVoidReason(''); setManagerPin(''); setVoidError('');
@@ -147,6 +149,7 @@ export default function TransactionReport() {
     try {
       if (txn.status !== 'void') {
         await reverseDailySalesSummary(txn);
+        await reverseLoyaltyForTransaction(txn, currentStaff, 'deleted transaction');
         await restoreTransactionIngredients(txn, currentStaff, 'deleted transaction');
       }
       await db.voidLog.where('transactionId').equals(txn.id).delete();
@@ -307,6 +310,20 @@ export default function TransactionReport() {
             <div><span className="form-label">Status</span><div>{selected.status === 'void' ? <span className="void-stamp">VOID</span> : <span className="badge badge-success">Completed</span>}</div></div>
           </div>
 
+          {selected.customerName && (
+            <div className="table-container" style={{ marginBottom: 16 }}>
+              <table className="data-table">
+                <tbody>
+                  <tr><td>Member</td><td className="text-right">{selected.customerName}</td></tr>
+                  <tr><td>Member Code</td><td className="text-right">{selected.memberCode || '-'}</td></tr>
+                  {Number(selected.loyaltyDiscount || 0) > 0 && <tr><td>Loyalty Discount</td><td className="text-right">-{formatCurrency(selected.loyaltyDiscount)}</td></tr>}
+                  {Number(selected.loyaltyRedeemed || 0) > 0 && <tr><td>Points Redeemed</td><td className="text-right">{selected.loyaltyRedeemed}</td></tr>}
+                  {Number(selected.loyaltyEarned || 0) > 0 && <tr><td>Points Earned</td><td className="text-right">{selected.loyaltyEarned}</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {normalizePaymentLines(selected).length > 1 && (
             <div className="table-container" style={{ marginBottom: 16 }}>
               <table className="data-table">
@@ -343,6 +360,15 @@ export default function TransactionReport() {
                   {selected.subtotal && <tr><td>Subtotal</td><td className="text-right">{formatCurrency(selected.subtotal)}</td></tr>}
                   {selected.orderDiscount > 0 && <tr><td>Order Discount</td><td className="text-right">-{selected.orderDiscount}%</td></tr>}
                   {selected.orderDiscountAmount > 0 && <tr><td>Order Discount Cash</td><td className="text-right">-{formatCurrency(selected.orderDiscountAmount)}</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {Number(selected.loyaltyDiscount || 0) > 0 && (
+            <div className="table-container" style={{ marginBottom: 16 }}>
+              <table className="data-table">
+                <tbody>
+                  <tr><td>Loyalty Discount</td><td className="text-right">-{formatCurrency(selected.loyaltyDiscount)}</td></tr>
                 </tbody>
               </table>
             </div>
