@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Search, Clock, CreditCard, X, Camera, ScanLine } from 'lucide-react';
+import { Search, Clock, CreditCard, X, ScanLine } from 'lucide-react';
 import db from '../db/database';
 import { usePosStore } from '../stores/posStore';
 import { useAuthStore } from '../stores/authStore';
@@ -462,11 +462,7 @@ export default function PointOfSale() {
           <div className="loyalty-panel">
             <div className="loyalty-member-row">
               <div className="text-sm text-muted" style={{ fontWeight: 700, textTransform: 'uppercase' }}><CreditCard size={14} /> Member</div>
-              {selectedCustomer ? (
-                <button className="btn btn-ghost btn-sm" onClick={clearCustomer}><X size={14} /> Remove</button>
-              ) : (
-                <button className="btn btn-secondary btn-sm" onClick={() => setShowQrScanner(true)}><Camera size={14} /> Scan QR</button>
-              )}
+              {selectedCustomer && <button className="btn btn-ghost btn-sm" onClick={clearCustomer}><X size={14} /> Remove</button>}
             </div>
             {selectedCustomer ? (
               <div style={{ display: 'grid', gap: 8 }}>
