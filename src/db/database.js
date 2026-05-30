@@ -116,6 +116,7 @@ function buildTable(tableName) {
 const db = {
   staff: buildTable('staff'),
   customers: buildTable('customers'),
+  membershipCards: buildTable('membership_cards'),
   loyaltyTransactions: buildTable('loyalty_transactions'),
   products: buildTable('products'),
   inventory: buildTable('inventory'),

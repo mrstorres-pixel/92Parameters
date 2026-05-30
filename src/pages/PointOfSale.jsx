@@ -10,7 +10,7 @@ import { recordIngredientMovement, updateDailySalesSummary } from '../utils/dura
 import { closeRunningBill, deleteRunningBill, loadOpenBills, saveRunningBill } from '../utils/runningBills';
 import { adjustIngredientStock } from '../utils/stockAdjustments';
 import { formatPaymentLabel } from '../utils/payments';
-import { calculateEarnedPoints, calculateRedeemPoints, getRedeemableAmount, writeLoyaltyTransaction } from '../utils/loyalty';
+import { calculateEarnedPoints, calculateRedeemPoints, extractMemberCode, getRedeemableAmount, writeLoyaltyTransaction } from '../utils/loyalty';
 import ProductGrid from '../components/pos/ProductGrid';
 import CartPanel from '../components/pos/CartPanel';
 import PaymentModal from '../components/pos/PaymentModal';
@@ -60,12 +60,15 @@ export default function PointOfSale() {
       return;
     }
     const q = query.trim();
-    const [byCode, byName, byPhone] = await Promise.all([
-      db.customers.query({ filters: [{ field: 'memberCode', op: 'ilike', value: `%${q}%` }], limit: 5 }),
+    const code = extractMemberCode(q);
+    const [byCard, byCode, byName, byPhone] = await Promise.all([
+      db.membershipCards.where('cardCode').equals(code).first(),
+      db.customers.query({ filters: [{ field: 'memberCode', op: 'ilike', value: `%${code || q}%` }], limit: 5 }),
       db.customers.query({ filters: [{ field: 'name', op: 'ilike', value: `%${q}%` }], limit: 5 }),
       db.customers.query({ filters: [{ field: 'phone', op: 'ilike', value: `%${q}%` }], limit: 5 }),
     ]);
-    const unique = [...byCode, ...byName, ...byPhone].filter((customer, index, arr) => arr.findIndex(c => c.id === customer.id) === index);
+    const cardCustomer = byCard?.customerId ? await db.customers.get(byCard.customerId) : null;
+    const unique = [cardCustomer, ...byCode, ...byName, ...byPhone].filter(Boolean).filter((customer, index, arr) => arr.findIndex(c => c.id === customer.id) === index);
     setCustomerResults(unique.filter(customer => customer.status !== 'inactive').slice(0, 8));
   }
 

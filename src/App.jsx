@@ -17,6 +17,7 @@ import TransactionReport from './pages/TransactionReport';
 import VoidLog from './pages/VoidLog';
 import StaffManagement from './pages/StaffManagement';
 import CustomerMembership from './pages/CustomerMembership';
+import MemberPortal from './pages/MemberPortal';
 import AuditLog from './pages/AuditLog';
 import Maintenance from './pages/Maintenance';
 
@@ -32,6 +33,18 @@ export default function App() {
     <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', color: 'var(--accent)', fontFamily: 'Playfair Display, serif', fontSize: '1.5rem' }}>
       Loading 92Parameters...
     </div>
+  );
+
+  const isPublicMemberPage = window.location.hash.startsWith('#/member/');
+
+  if (isPublicMemberPage) return (
+    <ToastProvider>
+      <HashRouter>
+        <Routes>
+          <Route path="/member/:code" element={<MemberPortal />} />
+        </Routes>
+      </HashRouter>
+    </ToastProvider>
   );
 
   if (!currentStaff) return (
@@ -55,6 +68,7 @@ export default function App() {
             <Route path="/voids" element={<VoidLog />} />
             <Route path="/staff" element={<StaffManagement />} />
             <Route path="/customers" element={<CustomerMembership />} />
+            <Route path="/member/:code" element={<MemberPortal />} />
             <Route path="/audit" element={<AuditLog />} />
             <Route path="/maintenance" element={<Maintenance />} />
           </Route>

@@ -8,6 +8,27 @@ export function generateMemberCode() {
   return `92P-MEMBER-${Date.now().toString().slice(-6)}-${random}`;
 }
 
+export function generateMembershipCardCode() {
+  const random = crypto.getRandomValues(new Uint32Array(1))[0].toString(36).toUpperCase().padStart(6, '0');
+  return `92P-CARD-${Date.now().toString().slice(-5)}-${random}`;
+}
+
+export function extractMemberCode(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const match = text.match(/92P-(?:CARD|MEMBER)-[A-Z0-9-]+/i);
+  return match ? match[0].toUpperCase() : text.toUpperCase();
+}
+
+export function getMemberPortalUrl(code) {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${origin}/#/member/${encodeURIComponent(code)}`;
+}
+
+export function getQrImageUrl(value, size = 180) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}`;
+}
+
 export function calculateEarnedPoints(amount) {
   return Math.max(0, Math.floor(Number(amount || 0) * POINTS_PER_PESO_EARNED));
 }

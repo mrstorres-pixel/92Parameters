@@ -355,6 +355,32 @@ body {
   border-radius: var(--radius-sm); background: var(--bg-secondary);
 }
 .loyalty-member-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.member-public-page {
+  min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+  padding: 20px; background: var(--bg-primary);
+}
+.member-public-card {
+  width: 100%; max-width: 440px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 22px; box-shadow: var(--shadow-lg);
+}
+.member-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.member-brand h1 { font-size: 1.25rem; color: var(--accent); }
+.member-brand p { color: var(--text-secondary); font-size: 0.85rem; }
+.member-points {
+  display: grid; justify-items: center; gap: 8px; padding: 24px 16px; margin-bottom: 18px;
+  border-radius: var(--radius); background: linear-gradient(135deg, rgba(212,152,42,0.18), rgba(255,255,255,0.03));
+  border: 1px solid rgba(212,152,42,0.25); text-align: center;
+}
+.member-points strong { color: var(--text-secondary); font-size: 0.9rem; }
+.member-points div { font-size: 3rem; line-height: 1; font-weight: 800; color: var(--accent); }
+.member-points p { color: var(--text-secondary); }
+.member-public-info { display: grid; gap: 8px; margin-bottom: 20px; }
+.member-public-info div { display: flex; align-items: center; gap: 10px; color: var(--text-secondary); font-size: 0.9rem; }
+.member-public-card h2 { font-size: 1rem; margin-bottom: 10px; }
+.member-history { display: grid; gap: 8px; }
+.member-history-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.member-history-row span { display: block; color: var(--text-muted); font-size: 0.78rem; margin-top: 2px; }
+.member-history-row b { color: var(--accent); }
 
 /* PIN Pad */
 .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 320px; margin: 0 auto; }

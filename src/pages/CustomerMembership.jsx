@@ -1,19 +1,23 @@
-import React, { useEffect, useState } from 'react';
-import { Plus, Edit2, History, Search, CreditCard, Gift, Ban, CheckCircle } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Plus, History, Search, CreditCard, Gift, Ban, CheckCircle, Printer, UserPlus, Download } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useToast } from '../components/common/Toast';
 import { useAuthStore } from '../stores/authStore';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
-import { generateMemberCode, POINTS_PER_PESO_EARNED, POINTS_PER_PESO_REDEEMED, writeLoyaltyTransaction } from '../utils/loyalty';
+import { generateMembershipCardCode, getMemberPortalUrl, getQrImageUrl, POINTS_PER_PESO_EARNED, POINTS_PER_PESO_REDEEMED, writeLoyaltyTransaction } from '../utils/loyalty';
 
-const empty = { name: '', phone: '', birthday: '', status: 'active' };
+const emptyCustomer = { name: '', phone: '', birthday: '' };
 
 export default function CustomerMembership() {
+  const [cards, setCards] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [search, setSearch] = useState('');
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(empty);
+  const [showGenerate, setShowGenerate] = useState(false);
+  const [batchName, setBatchName] = useState('');
+  const [batchCount, setBatchCount] = useState(20);
+  const [registeringCard, setRegisteringCard] = useState(null);
+  const [customerForm, setCustomerForm] = useState(emptyCustomer);
   const [historyCustomer, setHistoryCustomer] = useState(null);
   const [historyRows, setHistoryRows] = useState([]);
   const [adjusting, setAdjusting] = useState(null);
@@ -25,56 +29,82 @@ export default function CustomerMembership() {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    setCustomers(await db.customers.query({ orderBy: 'createdAt', ascending: false, limit: 1000 }));
+    const [cardRows, customerRows] = await Promise.all([
+      db.membershipCards.query({ orderBy: 'createdAt', ascending: false, limit: 2000 }),
+      db.customers.query({ orderBy: 'createdAt', ascending: false, limit: 2000 }),
+    ]);
+    setCards(cardRows);
+    setCustomers(customerRows);
   }
 
-  function openNew() {
-    setForm(empty);
-    setEditing('new');
+  async function generateCards() {
+    const count = Math.max(1, Math.min(500, Number(batchCount || 0)));
+    const now = Date.now();
+    const rows = Array.from({ length: count }, () => ({
+      cardCode: generateMembershipCardCode(),
+      status: 'available',
+      batchName: batchName.trim() || null,
+      createdAt: now,
+    }));
+    try {
+      await db.membershipCards.bulkAdd(rows);
+      await db.auditLog.add({ action: 'GENERATE_MEMBERSHIP_CARDS', entity: batchName || 'Membership Cards', staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(), details: `Generated ${count} cards` });
+      toast(`${count} cards generated`);
+      setShowGenerate(false);
+      setBatchName('');
+      setBatchCount(20);
+      load();
+    } catch (error) {
+      console.error(error);
+      toast('Could not generate cards', 'error');
+    }
   }
 
-  function openEdit(customer) {
-    setForm({
-      name: customer.name || '',
-      phone: customer.phone || '',
-      birthday: customer.birthday || '',
-      status: customer.status || 'active',
-    });
-    setEditing(customer);
-  }
-
-  async function save() {
-    if (!form.name.trim()) {
+  async function registerCard() {
+    if (!registeringCard || !customerForm.name.trim()) {
       toast('Customer name is required', 'error');
       return;
     }
     try {
-      const data = {
-        name: form.name.trim(),
-        phone: form.phone.trim(),
-        birthday: form.birthday || null,
-        status: form.status,
-        updatedAt: Date.now(),
+      const now = Date.now();
+      const customerData = {
+        memberCode: registeringCard.cardCode,
+        cardId: registeringCard.id,
+        name: customerForm.name.trim(),
+        phone: customerForm.phone.trim(),
+        birthday: customerForm.birthday || null,
+        pointsBalance: 0,
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+        activatedAt: now,
       };
-      if (editing === 'new') {
-        const id = await db.customers.add({
-          ...data,
-          memberCode: generateMemberCode(),
-          pointsBalance: 0,
-          createdAt: Date.now(),
-        });
-        await db.auditLog.add({ action: 'CREATE_CUSTOMER', entity: data.name, entityId: id, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(), details: 'Created loyalty member' });
-        toast('Customer member added');
-      } else {
-        await db.customers.update(editing.id, data);
-        await db.auditLog.add({ action: 'UPDATE_CUSTOMER', entity: data.name, entityId: editing.id, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(), details: 'Updated loyalty member' });
-        toast('Customer updated');
-      }
-      setEditing(null);
+      const customerId = await db.customers.add(customerData);
+      await db.membershipCards.update(registeringCard.id, {
+        status: 'active',
+        customerId,
+        customerName: customerData.name,
+        activatedAt: now,
+      });
+      await db.auditLog.add({ action: 'ACTIVATE_MEMBERSHIP_CARD', entity: registeringCard.cardCode, entityId: registeringCard.id, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: now, details: `Activated for ${customerData.name}` });
+      toast('Membership card activated');
+      setRegisteringCard(null);
+      setCustomerForm(emptyCustomer);
       load();
     } catch (error) {
       console.error(error);
-      toast('Could not save customer. Check the connection or member code.', 'error');
+      toast('Could not activate card. Check if the card is already registered.', 'error');
+    }
+  }
+
+  async function setCardStatus(card, status) {
+    try {
+      await db.membershipCards.update(card.id, { status, disabledAt: status === 'disabled' ? Date.now() : null });
+      if (card.customerId) await db.customers.update(card.customerId, { status: status === 'active' ? 'active' : 'inactive', updatedAt: Date.now() });
+      toast(status === 'active' ? 'Card reactivated' : 'Card disabled');
+      load();
+    } catch {
+      toast('Could not update card', 'error');
     }
   }
 
@@ -95,100 +125,132 @@ export default function CustomerMembership() {
       return;
     }
     try {
-      await writeLoyaltyTransaction({
-        customer: adjusting,
-        type: 'ADJUST',
-        points,
-        details: adjustReason.trim(),
-        staff: currentStaff,
-      });
+      await writeLoyaltyTransaction({ customer: adjusting, type: 'ADJUST', points, details: adjustReason.trim(), staff: currentStaff });
       toast('Points adjusted');
       setAdjusting(null);
       setAdjustPoints('');
       setAdjustReason('');
       load();
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast('Could not adjust points', 'error');
     }
   }
 
-  const filtered = customers.filter(customer => {
-    const q = search.toLowerCase();
-    return !q ||
-      (customer.name || '').toLowerCase().includes(q) ||
-      (customer.phone || '').toLowerCase().includes(q) ||
-      (customer.memberCode || '').toLowerCase().includes(q);
-  });
-  const activeCount = customers.filter(c => c.status !== 'inactive').length;
+  function exportCardsCsv() {
+    const rows = [['cardCode', 'status', 'memberUrl', 'batchName', 'customerName']];
+    cards.forEach(card => rows.push([card.cardCode, card.status, getMemberPortalUrl(card.cardCode), card.batchName || '', card.customerName || '']));
+    const csv = rows.map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `membership-cards-${Date.now()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function printCards() {
+    const available = filteredCards.filter(card => card.status === 'available');
+    const html = available.map(card => {
+      const url = getMemberPortalUrl(card.cardCode);
+      return `<div class="print-card"><img src="${getQrImageUrl(url, 180)}" /><h3>92 PARAMETERS</h3><p>${card.cardCode}</p><small>${url}</small></div>`;
+    }).join('');
+    const win = window.open('', '_blank');
+    win.document.write(`<html><head><title>Membership Cards</title><style>body{font-family:Arial,sans-serif;padding:20px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.print-card{border:1px solid #222;border-radius:10px;padding:12px;text-align:center;page-break-inside:avoid}.print-card img{width:120px;height:120px}.print-card h3{margin:6px 0;font-size:14px}.print-card p{font-weight:700;font-size:12px}.print-card small{font-size:8px;word-break:break-all}@media print{button{display:none}.grid{gap:8px}}</style></head><body><button onclick="window.print()">Print</button><div class="grid">${html}</div></body></html>`);
+    win.document.close();
+  }
+
+  const customerById = useMemo(() => Object.fromEntries(customers.map(c => [c.id, c])), [customers]);
+  const q = search.toLowerCase();
+  const filteredCards = cards.filter(card => !q ||
+    (card.cardCode || '').toLowerCase().includes(q) ||
+    (card.customerName || '').toLowerCase().includes(q) ||
+    (card.batchName || '').toLowerCase().includes(q));
+  const availableCount = cards.filter(c => c.status === 'available').length;
+  const activeCount = cards.filter(c => c.status === 'active').length;
   const totalPoints = customers.reduce((sum, c) => sum + Number(c.pointsBalance || 0), 0);
 
   return (
     <div className="animate-fade">
       <div className="page-header">
-        <h2>Customer Membership</h2>
-        <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Add Member</button>
+        <h2>Membership Cards</h2>
+        <div className="flex gap-8">
+          <button className="btn btn-secondary" onClick={exportCardsCsv}><Download size={16} /> Export</button>
+          <button className="btn btn-secondary" onClick={printCards}><Printer size={16} /> Print Available</button>
+          <button className="btn btn-primary" onClick={() => setShowGenerate(true)}><Plus size={16} /> Generate Cards</button>
+        </div>
       </div>
 
       <div className="stat-grid">
-        <div className="stat-card"><div className="stat-label">Members</div><div className="stat-value">{customers.length}</div></div>
+        <div className="stat-card"><div className="stat-label">Generated Cards</div><div className="stat-value">{cards.length}</div></div>
+        <div className="stat-card"><div className="stat-label">Available / Unsold</div><div className="stat-value">{availableCount}</div></div>
         <div className="stat-card"><div className="stat-label">Active Members</div><div className="stat-value">{activeCount}</div></div>
         <div className="stat-card"><div className="stat-label">Outstanding Points</div><div className="stat-value">{totalPoints}</div></div>
-        <div className="stat-card"><div className="stat-label">Redeem Rate</div><div className="stat-value" style={{ fontSize: '1.1rem' }}>{POINTS_PER_PESO_REDEEMED} pts = {formatCurrency(1)}</div></div>
       </div>
 
       <div className="alert-banner alert-info mb-24">
         <Gift size={18} />
-        <span>Members earn {POINTS_PER_PESO_EARNED} point per peso paid. Rewards redeem at {POINTS_PER_PESO_REDEEMED} points per peso discount.</span>
+        <span>Generate cards first, print the QR cards, then activate/register the card only when a customer buys it. Earn rate: {POINTS_PER_PESO_EARNED} point per peso. Redeem rate: {POINTS_PER_PESO_REDEEMED} points = {formatCurrency(1)}.</span>
       </div>
 
       <div className="toolbar">
-        <div className="search-bar"><Search size={16} /><input placeholder="Search name, phone, or card code..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+        <div className="search-bar"><Search size={16} /><input placeholder="Search card, batch, or customer..." value={search} onChange={e => setSearch(e.target.value)} /></div>
       </div>
 
       <div className="table-container">
         <table className="data-table">
-          <thead><tr><th>Member</th><th>Card Code</th><th>Phone</th><th>Points</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Card Code</th><th>Status</th><th>Customer</th><th>Points</th><th>Batch</th><th>QR / Link</th><th>Actions</th></tr></thead>
           <tbody>
-            {filtered.map(customer => (
-              <tr key={customer.id}>
-                <td style={{ fontWeight: 600 }}>{customer.name}</td>
-                <td><span className="badge badge-neutral">{customer.memberCode}</span></td>
-                <td>{customer.phone || '-'}</td>
-                <td style={{ fontWeight: 700, color: 'var(--accent)' }}>{customer.pointsBalance || 0}</td>
-                <td>{customer.status === 'inactive' ? <span className="badge badge-danger"><Ban size={12} /> Inactive</span> : <span className="badge badge-success"><CheckCircle size={12} /> Active</span>}</td>
-                <td>
-                  <div className="flex gap-8">
-                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openHistory(customer)} title="History"><History size={14} /></button>
-                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setAdjusting(customer)} title="Adjust Points"><Gift size={14} /></button>
-                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openEdit(customer)} title="Edit"><Edit2 size={14} /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {filteredCards.map(card => {
+              const customer = card.customerId ? customerById[card.customerId] : null;
+              return (
+                <tr key={card.id}>
+                  <td style={{ fontWeight: 700 }}>{card.cardCode}</td>
+                  <td><span className={`badge ${card.status === 'active' ? 'badge-success' : card.status === 'available' ? 'badge-warning' : 'badge-danger'}`}>{card.status}</span></td>
+                  <td>{card.customerName || '-'}</td>
+                  <td style={{ fontWeight: 700, color: 'var(--accent)' }}>{customer?.pointsBalance ?? '-'}</td>
+                  <td>{card.batchName || '-'}</td>
+                  <td><a className="text-sm" href={`#/member/${encodeURIComponent(card.cardCode)}`} target="_blank" rel="noreferrer">Open points page</a></td>
+                  <td>
+                    <div className="flex gap-8">
+                      {card.status === 'available' && <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setRegisteringCard(card)} title="Register Sold Card"><UserPlus size={14} /></button>}
+                      {customer && <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openHistory(customer)} title="History"><History size={14} /></button>}
+                      {customer && <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setAdjusting(customer)} title="Adjust Points"><Gift size={14} /></button>}
+                      {card.status === 'active'
+                        ? <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setCardStatus(card, 'disabled')} title="Disable"><Ban size={14} /></button>
+                        : card.status === 'disabled' && <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setCardStatus(card, 'active')} title="Reactivate"><CheckCircle size={14} /></button>}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
-      {editing && (
-        <Modal title={editing === 'new' ? 'Add Member' : 'Edit Member'} onClose={() => setEditing(null)} footer={
-          <><button className="btn btn-secondary" onClick={() => setEditing(null)}>Cancel</button><button className="btn btn-primary" onClick={save}>Save</button></>
+      {showGenerate && (
+        <Modal title="Generate Membership Cards" onClose={() => setShowGenerate(false)} footer={
+          <><button className="btn btn-secondary" onClick={() => setShowGenerate(false)}>Cancel</button><button className="btn btn-primary" onClick={generateCards}>Generate</button></>
         }>
-          {editing !== 'new' && (
-            <div className="membership-card mb-16">
-              <CreditCard size={22} />
-              <div>
-                <div style={{ fontWeight: 800 }}>{editing.memberCode}</div>
-                <div className="text-muted text-sm">Use this code on the customer's printed card or QR/barcode.</div>
-              </div>
+          <div className="form-group"><label className="form-label">Batch Name</label><input className="form-input" value={batchName} onChange={e => setBatchName(e.target.value)} placeholder="e.g. June 2026 Batch" /></div>
+          <div className="form-group"><label className="form-label">Number of Cards</label><input className="form-input" type="number" min="1" max="500" value={batchCount} onChange={e => setBatchCount(e.target.value)} /></div>
+        </Modal>
+      )}
+
+      {registeringCard && (
+        <Modal title={`Register Card ${registeringCard.cardCode}`} onClose={() => setRegisteringCard(null)} footer={
+          <><button className="btn btn-secondary" onClick={() => setRegisteringCard(null)}>Cancel</button><button className="btn btn-primary" onClick={registerCard}>Activate Card</button></>
+        }>
+          <div className="membership-card mb-16">
+            <img src={getQrImageUrl(getMemberPortalUrl(registeringCard.cardCode), 120)} alt="Membership QR" style={{ width: 84, height: 84 }} />
+            <div>
+              <div style={{ fontWeight: 800 }}>{registeringCard.cardCode}</div>
+              <div className="text-muted text-sm">This card becomes active after customer details are saved.</div>
             </div>
-          )}
-          <div className="form-group"><label className="form-label">Name</label><input className="form-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} autoFocus /></div>
-          <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Birthday</label><input className="form-input" type="date" value={form.birthday || ''} onChange={e => setForm({ ...form, birthday: e.target.value })} /></div>
-            <div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
           </div>
+          <div className="form-group"><label className="form-label">Customer Name</label><input className="form-input" value={customerForm.name} onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })} autoFocus /></div>
+          <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} /></div>
+          <div className="form-group"><label className="form-label">Birthday</label><input className="form-input" type="date" value={customerForm.birthday || ''} onChange={e => setCustomerForm({ ...customerForm, birthday: e.target.value })} /></div>
         </Modal>
       )}
 
