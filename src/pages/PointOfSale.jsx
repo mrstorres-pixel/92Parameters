@@ -1,9 +1,10 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Search, Clock, CreditCard, X } from 'lucide-react';
+import { Search, Clock, CreditCard, X, Camera, ScanLine } from 'lucide-react';
 import db from '../db/database';
 import { usePosStore } from '../stores/posStore';
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
+import Modal from '../components/common/Modal';
 import { formatCurrency, generateReceiptNo } from '../utils/formatters';
 import { calcCartSubtotal, calcCartTotal } from '../utils/calculations';
 import { recordIngredientMovement, updateDailySalesSummary } from '../utils/durability';
@@ -31,11 +32,17 @@ export default function PointOfSale() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [loyaltyRedeemAmount, setLoyaltyRedeemAmount] = useState('');
   const [birthdayReward, setBirthdayReward] = useState(false);
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const [qrScanError, setQrScanError] = useState('');
   const [runningBills, setRunningBills] = useState([]);
   const [activeBill, setActiveBill] = useState(null);
   const { cart, orderType, orderDiscount, orderDiscountAmount, addItem, clearCart, setCart } = usePosStore();
   const currentStaff = useAuthStore(s => s.currentStaff);
   const paymentLockRef = useRef(false);
+  const videoRef = useRef(null);
+  const scannerStreamRef = useRef(null);
+  const scannerFrameRef = useRef(null);
+  const scannerBusyRef = useRef(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -52,6 +59,18 @@ export default function PointOfSale() {
 
   async function refreshBills() {
     setRunningBills(await loadOpenBills());
+  }
+
+  async function getCustomerFromScan(value) {
+    const code = extractMemberCode(value);
+    if (!code) throw new Error('No membership code found in QR.');
+    const card = await db.membershipCards.where('cardCode').equals(code).first();
+    if (card && card.status !== 'active') throw new Error(`Membership card is ${card.status}.`);
+    const customer = card?.customerId ? await db.customers.get(card.customerId) : await db.customers.where('memberCode').equals(code).first();
+    if (!customer) throw new Error('Membership card is not registered yet.');
+    if (customer.status === 'inactive') throw new Error('Membership is inactive.');
+    if (isMembershipExpired(customer)) throw new Error('Membership is expired.');
+    return customer;
   }
 
   async function searchCustomers(query) {
@@ -88,6 +107,88 @@ export default function PointOfSale() {
     setLoyaltyRedeemAmount('');
     setBirthdayReward(false);
   }
+
+  function stopQrScanner() {
+    if (scannerFrameRef.current) cancelAnimationFrame(scannerFrameRef.current);
+    scannerFrameRef.current = null;
+    scannerBusyRef.current = false;
+    scannerStreamRef.current?.getTracks().forEach(track => track.stop());
+    scannerStreamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+  }
+
+  async function handleQrValue(value) {
+    if (scannerBusyRef.current) return;
+    scannerBusyRef.current = true;
+    try {
+      const customer = await getCustomerFromScan(value);
+      selectCustomer(customer);
+      toast(`Member selected: ${customer.name}`, 'success');
+      setShowQrScanner(false);
+    } catch (error) {
+      setQrScanError(error.message || 'Could not read this membership QR.');
+      scannerBusyRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if (!showQrScanner) {
+      stopQrScanner();
+      return;
+    }
+
+    let cancelled = false;
+    async function startScanner() {
+      setQrScanError('');
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setQrScanError('Camera access is not available in this browser.');
+        return;
+      }
+      if (!window.BarcodeDetector) {
+        setQrScanError('Camera QR scanning is not supported here. Use Chrome on Android or search the member manually.');
+        return;
+      }
+      try {
+        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+        scannerStreamRef.current = stream;
+        if (!videoRef.current) return;
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+
+        const scanFrame = async () => {
+          if (cancelled || !videoRef.current || scannerBusyRef.current) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            const value = codes?.[0]?.rawValue;
+            if (value) {
+              await handleQrValue(value);
+              return;
+            }
+          } catch (error) {
+            setQrScanError('Could not read the camera frame. Try better lighting or use manual search.');
+          }
+          scannerFrameRef.current = requestAnimationFrame(scanFrame);
+        };
+        scannerFrameRef.current = requestAnimationFrame(scanFrame);
+      } catch (error) {
+        setQrScanError('Camera permission was blocked or no camera was found.');
+      }
+    }
+
+    startScanner();
+    return () => {
+      cancelled = true;
+      stopQrScanner();
+    };
+  }, [showQrScanner]);
 
   async function saveBill() {
     if (cart.length === 0) return;
@@ -361,7 +462,11 @@ export default function PointOfSale() {
           <div className="loyalty-panel">
             <div className="loyalty-member-row">
               <div className="text-sm text-muted" style={{ fontWeight: 700, textTransform: 'uppercase' }}><CreditCard size={14} /> Member</div>
-              {selectedCustomer && <button className="btn btn-ghost btn-sm" onClick={clearCustomer}><X size={14} /> Remove</button>}
+              {selectedCustomer ? (
+                <button className="btn btn-ghost btn-sm" onClick={clearCustomer}><X size={14} /> Remove</button>
+              ) : (
+                <button className="btn btn-secondary btn-sm" onClick={() => setShowQrScanner(true)}><Camera size={14} /> Scan QR</button>
+              )}
             </div>
             {selectedCustomer ? (
               <div style={{ display: 'grid', gap: 8 }}>
@@ -393,9 +498,12 @@ export default function PointOfSale() {
               </div>
             ) : (
               <div style={{ position: 'relative' }}>
-                <div className="search-bar" style={{ maxWidth: '100%', width: '100%' }}>
-                  <Search size={16} />
-                  <input placeholder="Scan card or search member..." value={customerSearch} onChange={e => searchCustomers(e.target.value)} />
+                <div className="member-search-row">
+                  <div className="search-bar" style={{ maxWidth: '100%', width: '100%' }}>
+                    <Search size={16} />
+                    <input placeholder="Search member name, phone, or card code..." value={customerSearch} onChange={e => searchCustomers(e.target.value)} />
+                  </div>
+                  <button className="btn btn-primary btn-sm" onClick={() => setShowQrScanner(true)}><ScanLine size={14} /> Scan</button>
                 </div>
                 {customerResults.length > 0 && (
                   <div className="card" style={{ position: 'absolute', left: 0, right: 0, top: 'calc(100% + 6px)', zIndex: 20, padding: 8 }}>
@@ -414,6 +522,20 @@ export default function PointOfSale() {
         <ProductGrid products={products} category={category} subCategory={subCategory} searchQuery={search} onAdd={addItem} />
       </div>
       <CartPanel onCharge={openPayment} activeBill={activeBill} onSaveBill={saveBill} onCloseBill={closeBill} checkoutDisabled={showPayment || isProcessingPayment} loyaltyCustomer={selectedCustomer} loyaltyDiscount={Math.min(selectedCustomer ? getRedeemableAmount(selectedCustomer, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0)) : 0, Math.max(0, Number(loyaltyRedeemAmount || 0)))} />
+      {showQrScanner && (
+        <Modal title="Scan Membership QR" onClose={() => setShowQrScanner(false)} footer={
+          <>
+            <button className="btn btn-secondary" onClick={() => setShowQrScanner(false)}>Close</button>
+          </>
+        }>
+          <div className="qr-scanner">
+            <video ref={videoRef} className="qr-scanner-video" muted playsInline autoPlay />
+            <div className="qr-scanner-frame"><ScanLine size={32} /></div>
+          </div>
+          <p className="text-center text-muted text-sm" style={{ marginTop: 12 }}>Point the camera at the member card QR code.</p>
+          {qrScanError && <div className="alert-banner alert-warning" style={{ marginTop: 12 }}><span>{qrScanError}</span></div>}
+        </Modal>
+      )}
       {showPayment && <PaymentModal total={Math.max(0, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0) - Math.min(selectedCustomer ? getRedeemableAmount(selectedCustomer, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0)) : 0, Math.max(0, Number(loyaltyRedeemAmount || 0))))} onConfirm={handlePayment} onClose={() => { if (!isProcessingPayment) setShowPayment(false); }} isProcessing={isProcessingPayment} />}
       {receipt && <ReceiptModal transaction={receipt} onClose={() => setReceipt(null)} />}
     </div>
