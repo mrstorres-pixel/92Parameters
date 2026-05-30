@@ -10,7 +10,7 @@ import { recordIngredientMovement, updateDailySalesSummary } from '../utils/dura
 import { closeRunningBill, deleteRunningBill, loadOpenBills, saveRunningBill } from '../utils/runningBills';
 import { adjustIngredientStock } from '../utils/stockAdjustments';
 import { formatPaymentLabel } from '../utils/payments';
-import { calculateEarnedPoints, calculateRedeemPoints, extractMemberCode, getRedeemableAmount, writeLoyaltyTransaction } from '../utils/loyalty';
+import { calculateEarnedPoints, calculateRedeemPoints, extractMemberCode, getBirthdayRewardStatus, getRedeemableAmount, isMembershipExpired, writeLoyaltyTransaction } from '../utils/loyalty';
 import ProductGrid from '../components/pos/ProductGrid';
 import CartPanel from '../components/pos/CartPanel';
 import PaymentModal from '../components/pos/PaymentModal';
@@ -30,6 +30,7 @@ export default function PointOfSale() {
   const [customerResults, setCustomerResults] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [loyaltyRedeemAmount, setLoyaltyRedeemAmount] = useState('');
+  const [birthdayReward, setBirthdayReward] = useState(false);
   const [runningBills, setRunningBills] = useState([]);
   const [activeBill, setActiveBill] = useState(null);
   const { cart, orderType, orderDiscount, orderDiscountAmount, addItem, clearCart, setCart } = usePosStore();
@@ -69,7 +70,7 @@ export default function PointOfSale() {
     ]);
     const cardCustomer = byCard?.customerId ? await db.customers.get(byCard.customerId) : null;
     const unique = [cardCustomer, ...byCode, ...byName, ...byPhone].filter(Boolean).filter((customer, index, arr) => arr.findIndex(c => c.id === customer.id) === index);
-    setCustomerResults(unique.filter(customer => customer.status !== 'inactive').slice(0, 8));
+    setCustomerResults(unique.filter(customer => customer.status !== 'inactive' && !isMembershipExpired(customer)).slice(0, 8));
   }
 
   function selectCustomer(customer) {
@@ -77,6 +78,7 @@ export default function PointOfSale() {
     setCustomerSearch('');
     setCustomerResults([]);
     setLoyaltyRedeemAmount('');
+    setBirthdayReward(false);
   }
 
   function clearCustomer() {
@@ -84,6 +86,7 @@ export default function PointOfSale() {
     setCustomerSearch('');
     setCustomerResults([]);
     setLoyaltyRedeemAmount('');
+    setBirthdayReward(false);
   }
 
   async function saveBill() {
@@ -152,6 +155,8 @@ export default function PointOfSale() {
       const loyaltyRedeemed = calculateRedeemPoints(loyaltyDiscount);
       const total = Math.max(0, orderTotal - loyaltyDiscount);
       const loyaltyEarned = selectedCustomer ? calculateEarnedPoints(total) : 0;
+      const birthdayStatus = selectedCustomer ? getBirthdayRewardStatus(selectedCustomer) : { eligible: false };
+      const birthdayRewardRedeemed = Boolean(selectedCustomer && birthdayReward && birthdayStatus.eligible);
       const cleanPaymentLines = paymentLines.map(line => ({ method: line.method, amount: Number(line.amount || 0) })).filter(line => line.amount > 0);
       const paidTotal = cleanPaymentLines.reduce((sum, line) => sum + line.amount, 0);
       if (paidTotal < total) throw new Error('Payment is not complete yet.');
@@ -169,7 +174,7 @@ export default function PointOfSale() {
         paymentLines: appliedPaymentLines,
         orderDiscount, orderMarkup: 0, orderDiscountAmount, orderMarkupAmount: 0, subtotal: calcCartSubtotal(cart),
         customerId: selectedCustomer?.id || null, customerName: selectedCustomer?.name || null, memberCode: selectedCustomer?.memberCode || null,
-        loyaltyEarned, loyaltyRedeemed, loyaltyDiscount,
+        loyaltyEarned, loyaltyRedeemed, loyaltyDiscount, birthdayRewardRedeemed,
         total, cashReceived,
         staffId: currentStaff?.id, staffName: currentStaff?.name, status: 'completed',
       };
@@ -186,12 +191,12 @@ export default function PointOfSale() {
         if (selectedCustomer) {
           throw new Error('Membership database migration is required before charging member sales.');
         }
-        const { checkoutKey: _checkoutKey, paymentLines: _paymentLines, customerId: _customerId, customerName: _customerName, memberCode: _memberCode, loyaltyEarned: _loyaltyEarned, loyaltyRedeemed: _loyaltyRedeemed, loyaltyDiscount: _loyaltyDiscount, orderDiscount: _orderDiscount, orderMarkup: _orderMarkup, orderDiscountAmount: _orderDiscountAmount, orderMarkupAmount: _orderMarkupAmount, subtotal: _subtotal, ...legacyTxn } = txn;
+        const { checkoutKey: _checkoutKey, paymentLines: _paymentLines, customerId: _customerId, customerName: _customerName, memberCode: _memberCode, loyaltyEarned: _loyaltyEarned, loyaltyRedeemed: _loyaltyRedeemed, loyaltyDiscount: _loyaltyDiscount, birthdayRewardRedeemed: _birthdayRewardRedeemed, orderDiscount: _orderDiscount, orderMarkup: _orderMarkup, orderDiscountAmount: _orderDiscountAmount, orderMarkupAmount: _orderMarkupAmount, subtotal: _subtotal, ...legacyTxn } = txn;
         transactionId = await db.transactions.add(legacyTxn);
       }
       const savedTxn = { ...txn, id: transactionId };
       const summaryUpdated = await updateDailySalesSummary(savedTxn);
-      if (selectedCustomer && (loyaltyEarned || loyaltyRedeemed)) {
+      if (selectedCustomer && (loyaltyEarned || loyaltyRedeemed || birthdayRewardRedeemed)) {
         if (loyaltyRedeemed) {
           await writeLoyaltyTransaction({
             customer: selectedCustomer,
@@ -214,6 +219,26 @@ export default function PointOfSale() {
             amount: total,
             details: `Earned from sale ${receiptNo}`,
             staff: currentStaff,
+          });
+        }
+        if (birthdayRewardRedeemed) {
+          const year = new Date().getFullYear();
+          await db.customers.update(selectedCustomer.id, { birthdayRewardYear: year, updatedAt: Date.now() });
+          await db.loyaltyTransactions.add({
+            customerId: selectedCustomer.id,
+            customerName: selectedCustomer.name,
+            memberCode: selectedCustomer.memberCode,
+            transactionId,
+            receiptNo,
+            type: 'BIRTHDAY_REWARD',
+            points: 0,
+            amount: 0,
+            beforePoints: Number(selectedCustomer.pointsBalance || 0),
+            afterPoints: Number(selectedCustomer.pointsBalance || 0),
+            details: 'Birthday month reward redeemed: free cake slice and coffee',
+            staffId: currentStaff?.id,
+            staffName: currentStaff?.name,
+            datetime: Date.now(),
           });
         }
       }
@@ -343,10 +368,18 @@ export default function PointOfSale() {
                 <div className="flex-between">
                   <div>
                     <div style={{ fontWeight: 700 }}>{selectedCustomer.name}</div>
-                    <div className="text-muted text-sm">{selectedCustomer.memberCode} · {selectedCustomer.pointsBalance || 0} pts</div>
+                    <div className="text-muted text-sm">{selectedCustomer.memberCode} - {selectedCustomer.pointsBalance || 0} pts</div>
                   </div>
                   <span className="badge badge-success">Active</span>
                 </div>
+                {getBirthdayRewardStatus(selectedCustomer).eligible ? (
+                  <label className="checkbox-row">
+                    <input type="checkbox" checked={birthdayReward} onChange={e => setBirthdayReward(e.target.checked)} />
+                    <span>Redeem birthday reward: free cake slice and coffee</span>
+                  </label>
+                ) : (
+                  <div className="text-muted text-sm">Birthday promo: {getBirthdayRewardStatus(selectedCustomer).reason}</div>
+                )}
                 <div className="form-row">
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">Redeem PHP</label>

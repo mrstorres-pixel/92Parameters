@@ -77,6 +77,7 @@ export default function ReceiptModal({ transaction, onClose }) {
       rows.push({ type: 'text', text: `Member: ${t.customerName}` });
       if (Number(t.loyaltyEarned || 0) > 0) rows.push({ type: 'text', text: `Points Earned: ${t.loyaltyEarned}` });
       if (Number(t.loyaltyRedeemed || 0) > 0) rows.push({ type: 'text', text: `Points Redeemed: ${t.loyaltyRedeemed}` });
+      if (t.birthdayRewardRedeemed) rows.push({ type: 'text', text: 'Birthday Reward: Redeemed' });
     }
     rows.push({ type: 'space' });
     rows.push({ type: 'center', text: '--- Powered by 92Parameters ---' });
@@ -318,6 +319,7 @@ export default function ReceiptModal({ transaction, onClose }) {
             Member: {t.customerName}<br />
             {Number(t.loyaltyEarned || 0) > 0 && <>Points Earned: {t.loyaltyEarned}<br /></>}
             {Number(t.loyaltyRedeemed || 0) > 0 && <>Points Redeemed: {t.loyaltyRedeemed}<br /></>}
+            {t.birthdayRewardRedeemed && <>Birthday Reward: Redeemed<br /></>}
           </div>
         )}
 

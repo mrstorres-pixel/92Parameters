@@ -319,6 +319,7 @@ export default function TransactionReport() {
                   {Number(selected.loyaltyDiscount || 0) > 0 && <tr><td>Loyalty Discount</td><td className="text-right">-{formatCurrency(selected.loyaltyDiscount)}</td></tr>}
                   {Number(selected.loyaltyRedeemed || 0) > 0 && <tr><td>Points Redeemed</td><td className="text-right">{selected.loyaltyRedeemed}</td></tr>}
                   {Number(selected.loyaltyEarned || 0) > 0 && <tr><td>Points Earned</td><td className="text-right">{selected.loyaltyEarned}</td></tr>}
+                  {selected.birthdayRewardRedeemed && <tr><td>Birthday Reward</td><td className="text-right">Redeemed</td></tr>}
                 </tbody>
               </table>
             </div>

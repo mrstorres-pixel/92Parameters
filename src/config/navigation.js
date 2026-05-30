@@ -11,7 +11,7 @@ export const navItems = [
   { to: '/ingredients', icon: Leaf, label: 'Ingredients', roles: ['owner'] },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: ['owner'] },
   { to: '/voids', icon: Ban, label: 'Void Log', roles: ['manager', 'owner'] },
-  { to: '/customers', icon: CreditCard, label: 'Membership', roles: ['cashier', 'manager', 'owner'] },
+  { to: '/customers', icon: CreditCard, label: 'Membership', roles: ['owner'] },
   { to: '/staff', icon: Users, label: 'Staff Management', roles: ['owner'] },
   { to: '/audit', icon: History, label: 'Audit Log', roles: ['owner'] },
   { to: '/maintenance', icon: ShieldCheck, label: 'Maintenance', roles: ['owner'] },

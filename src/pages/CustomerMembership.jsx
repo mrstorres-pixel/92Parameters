@@ -5,7 +5,7 @@ import Modal from '../components/common/Modal';
 import { useToast } from '../components/common/Toast';
 import { useAuthStore } from '../stores/authStore';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
-import { generateMembershipCardCode, getMemberPortalUrl, getQrImageUrl, POINTS_PER_PESO_EARNED, POINTS_PER_PESO_REDEEMED, writeLoyaltyTransaction } from '../utils/loyalty';
+import { generateMembershipCardCode, getBirthdayRewardStatus, getMembershipExpiry, getMemberPortalUrl, getQrImageUrl, isMembershipExpired, PESOS_PER_POINT_EARNED, POINTS_PER_PESO_REDEEMED, writeLoyaltyTransaction } from '../utils/loyalty';
 
 const emptyCustomer = { name: '', phone: '', birthday: '' };
 
@@ -79,6 +79,8 @@ export default function CustomerMembership() {
         createdAt: now,
         updatedAt: now,
         activatedAt: now,
+        expiresAt: getMembershipExpiry(now),
+        birthdayRewardYear: null,
       };
       const customerId = await db.customers.add(customerData);
       await db.membershipCards.update(registeringCard.id, {
@@ -86,6 +88,7 @@ export default function CustomerMembership() {
         customerId,
         customerName: customerData.name,
         activatedAt: now,
+        expiresAt: customerData.expiresAt,
       });
       await db.auditLog.add({ action: 'ACTIVATE_MEMBERSHIP_CARD', entity: registeringCard.cardCode, entityId: registeringCard.id, staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: now, details: `Activated for ${customerData.name}` });
       toast('Membership card activated');
@@ -193,7 +196,7 @@ export default function CustomerMembership() {
 
       <div className="alert-banner alert-info mb-24">
         <Gift size={18} />
-        <span>Generate cards first, print the QR cards, then activate/register the card only when a customer buys it. Earn rate: {POINTS_PER_PESO_EARNED} point per peso. Redeem rate: {POINTS_PER_PESO_REDEEMED} points = {formatCurrency(1)}.</span>
+        <span>Generate cards first, print the QR cards, then activate/register the card only when a customer buys it. Earn rate: every {formatCurrency(PESOS_PER_POINT_EARNED)} = 1 point. Redeem rate: {POINTS_PER_PESO_REDEEMED} point = {formatCurrency(1)}.</span>
       </div>
 
       <div className="toolbar">
@@ -206,10 +209,11 @@ export default function CustomerMembership() {
           <tbody>
             {filteredCards.map(card => {
               const customer = card.customerId ? customerById[card.customerId] : null;
+              const expired = customer ? isMembershipExpired(customer) : false;
               return (
                 <tr key={card.id} className={card.customerId ? 'clickable' : ''} onClick={() => card.customerId && setViewingCard(card)}>
                   <td style={{ fontWeight: 700 }}>{card.cardCode}</td>
-                  <td><span className={`badge ${card.status === 'active' ? 'badge-success' : card.status === 'available' ? 'badge-warning' : 'badge-danger'}`}>{card.status}</span></td>
+                  <td><span className={`badge ${expired ? 'badge-danger' : card.status === 'active' ? 'badge-success' : card.status === 'available' ? 'badge-warning' : 'badge-danger'}`}>{expired ? 'expired' : card.status}</span></td>
                   <td>{card.customerName || '-'}</td>
                   <td style={{ fontWeight: 700, color: 'var(--accent)' }}>{customer?.pointsBalance ?? '-'}</td>
                   <td>{card.batchName || '-'}</td>
@@ -282,8 +286,10 @@ export default function CustomerMembership() {
                   <tr><th>Customer</th><td>{viewingCustomer?.name || viewingCard.customerName || '-'}</td></tr>
                   <tr><th>Phone</th><td>{viewingCustomer?.phone || '-'}</td></tr>
                   <tr><th>Birthday</th><td>{viewingCustomer?.birthday || '-'}</td></tr>
+                  <tr><th>Birthday Promo</th><td>{viewingCustomer ? getBirthdayRewardStatus(viewingCustomer).reason : '-'}</td></tr>
                   <tr><th>Batch</th><td>{viewingCard.batchName || '-'}</td></tr>
                   <tr><th>Activated</th><td>{viewingCard.activatedAt ? formatDateTime(viewingCard.activatedAt) : '-'}</td></tr>
+                  <tr><th>Expires</th><td>{viewingCustomer?.expiresAt ? formatDateTime(viewingCustomer.expiresAt) : viewingCard.expiresAt ? formatDateTime(viewingCard.expiresAt) : '-'}</td></tr>
                   <tr><th>Member URL</th><td style={{ overflowWrap: 'anywhere' }}>{viewingUrl}</td></tr>
                 </tbody>
               </table>
