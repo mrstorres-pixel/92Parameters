@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, History, Search, CreditCard, Gift, Ban, CheckCircle, Printer, UserPlus, Download } from 'lucide-react';
+import { Plus, History, Search, CreditCard, Gift, Ban, CheckCircle, Printer, UserPlus, Download, Eye, ExternalLink } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useToast } from '../components/common/Toast';
@@ -17,6 +17,7 @@ export default function CustomerMembership() {
   const [batchName, setBatchName] = useState('');
   const [batchCount, setBatchCount] = useState(20);
   const [registeringCard, setRegisteringCard] = useState(null);
+  const [viewingCard, setViewingCard] = useState(null);
   const [customerForm, setCustomerForm] = useState(emptyCustomer);
   const [historyCustomer, setHistoryCustomer] = useState(null);
   const [historyRows, setHistoryRows] = useState([]);
@@ -169,6 +170,8 @@ export default function CustomerMembership() {
   const availableCount = cards.filter(c => c.status === 'available').length;
   const activeCount = cards.filter(c => c.status === 'active').length;
   const totalPoints = customers.reduce((sum, c) => sum + Number(c.pointsBalance || 0), 0);
+  const viewingCustomer = viewingCard?.customerId ? customerById[viewingCard.customerId] : null;
+  const viewingUrl = viewingCard ? getMemberPortalUrl(viewingCard.cardCode) : '';
 
   return (
     <div className="animate-fade">
@@ -204,7 +207,7 @@ export default function CustomerMembership() {
             {filteredCards.map(card => {
               const customer = card.customerId ? customerById[card.customerId] : null;
               return (
-                <tr key={card.id}>
+                <tr key={card.id} className={card.customerId ? 'clickable' : ''} onClick={() => card.customerId && setViewingCard(card)}>
                   <td style={{ fontWeight: 700 }}>{card.cardCode}</td>
                   <td><span className={`badge ${card.status === 'active' ? 'badge-success' : card.status === 'available' ? 'badge-warning' : 'badge-danger'}`}>{card.status}</span></td>
                   <td>{card.customerName || '-'}</td>
@@ -213,12 +216,13 @@ export default function CustomerMembership() {
                   <td><a className="text-sm" href={`#/member/${encodeURIComponent(card.cardCode)}`} target="_blank" rel="noreferrer">Open points page</a></td>
                   <td>
                     <div className="flex gap-8">
+                      {card.customerId && <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); setViewingCard(card); }} title="View Card"><Eye size={14} /></button>}
                       {card.status === 'available' && <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setRegisteringCard(card)} title="Register Sold Card"><UserPlus size={14} /></button>}
-                      {customer && <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openHistory(customer)} title="History"><History size={14} /></button>}
-                      {customer && <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setAdjusting(customer)} title="Adjust Points"><Gift size={14} /></button>}
+                      {customer && <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); openHistory(customer); }} title="History"><History size={14} /></button>}
+                      {customer && <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); setAdjusting(customer); }} title="Adjust Points"><Gift size={14} /></button>}
                       {card.status === 'active'
-                        ? <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setCardStatus(card, 'disabled')} title="Disable"><Ban size={14} /></button>
-                        : card.status === 'disabled' && <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setCardStatus(card, 'active')} title="Reactivate"><CheckCircle size={14} /></button>}
+                        ? <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); setCardStatus(card, 'disabled'); }} title="Disable"><Ban size={14} /></button>
+                        : card.status === 'disabled' && <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); setCardStatus(card, 'active'); }} title="Reactivate"><CheckCircle size={14} /></button>}
                     </div>
                   </td>
                 </tr>
@@ -251,6 +255,40 @@ export default function CustomerMembership() {
           <div className="form-group"><label className="form-label">Customer Name</label><input className="form-input" value={customerForm.name} onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })} autoFocus /></div>
           <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} /></div>
           <div className="form-group"><label className="form-label">Birthday</label><input className="form-input" type="date" value={customerForm.birthday || ''} onChange={e => setCustomerForm({ ...customerForm, birthday: e.target.value })} /></div>
+        </Modal>
+      )}
+
+      {viewingCard && (
+        <Modal title={`Membership Card ${viewingCard.cardCode}`} large onClose={() => setViewingCard(null)} footer={
+          <>
+            {viewingCustomer && <button className="btn btn-secondary" onClick={() => openHistory(viewingCustomer)}><History size={14} /> History</button>}
+            {viewingCustomer && <button className="btn btn-secondary" onClick={() => setAdjusting(viewingCustomer)}><Gift size={14} /> Adjust Points</button>}
+            <button className="btn btn-primary" onClick={() => setViewingCard(null)}>Close</button>
+          </>
+        }>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 20, alignItems: 'start' }}>
+            <div className="membership-card" style={{ flexDirection: 'column', textAlign: 'center' }}>
+              <img src={getQrImageUrl(viewingUrl, 220)} alt="Membership QR" style={{ width: 160, height: 160 }} />
+              <div style={{ fontWeight: 800 }}>{viewingCard.cardCode}</div>
+              <a href={`#/member/${encodeURIComponent(viewingCard.cardCode)}`} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm"><ExternalLink size={14} /> Open Page</a>
+            </div>
+            <div>
+              <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', marginBottom: 16 }}>
+                <div className="stat-card"><div className="stat-label">Status</div><div className="stat-value" style={{ fontSize: '1.05rem' }}>{viewingCard.status}</div></div>
+                <div className="stat-card"><div className="stat-label">Points</div><div className="stat-value">{viewingCustomer?.pointsBalance || 0}</div></div>
+              </div>
+              <table className="summary-table">
+                <tbody>
+                  <tr><th>Customer</th><td>{viewingCustomer?.name || viewingCard.customerName || '-'}</td></tr>
+                  <tr><th>Phone</th><td>{viewingCustomer?.phone || '-'}</td></tr>
+                  <tr><th>Birthday</th><td>{viewingCustomer?.birthday || '-'}</td></tr>
+                  <tr><th>Batch</th><td>{viewingCard.batchName || '-'}</td></tr>
+                  <tr><th>Activated</th><td>{viewingCard.activatedAt ? formatDateTime(viewingCard.activatedAt) : '-'}</td></tr>
+                  <tr><th>Member URL</th><td style={{ overflowWrap: 'anywhere' }}>{viewingUrl}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </Modal>
       )}
 
