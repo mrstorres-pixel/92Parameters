@@ -1,6 +1,6 @@
 import db from '../db/database';
 
-export const PESOS_PER_POINT_EARNED = 100;
+export const PESOS_PER_POINT_EARNED = 150;
 export const POINTS_PER_PESO_REDEEMED = 1;
 
 export function generateMemberCode() {
