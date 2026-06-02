@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, History, Search, CreditCard, Gift, Ban, CheckCircle, Printer, UserPlus, Download, Eye, ExternalLink } from 'lucide-react';
+import { Plus, History, Search, CreditCard, Gift, Ban, CheckCircle, Printer, UserPlus, Download, Eye, ExternalLink, Pencil } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useToast } from '../components/common/Toast';
@@ -22,6 +22,8 @@ export default function CustomerMembership() {
   const [historyCustomer, setHistoryCustomer] = useState(null);
   const [historyRows, setHistoryRows] = useState([]);
   const [adjusting, setAdjusting] = useState(null);
+  const [editingCustomer, setEditingCustomer] = useState(null);
+  const [editForm, setEditForm] = useState(emptyCustomer);
   const [adjustPoints, setAdjustPoints] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
   const currentStaff = useAuthStore(s => s.currentStaff);
@@ -140,6 +142,52 @@ export default function CustomerMembership() {
     }
   }
 
+  function openEditCustomer(customer) {
+    setEditingCustomer(customer);
+    setEditForm({
+      name: customer.name || '',
+      phone: customer.phone || '',
+      birthday: customer.birthday || '',
+    });
+  }
+
+  async function saveCustomerDetails() {
+    if (!editingCustomer || !editForm.name.trim()) {
+      toast('Customer name is required', 'error');
+      return;
+    }
+    const updates = {
+      name: editForm.name.trim(),
+      phone: editForm.phone.trim(),
+      birthday: editForm.birthday || null,
+      updatedAt: Date.now(),
+    };
+    try {
+      await db.customers.update(editingCustomer.id, updates);
+      const cardId = editingCustomer.cardId || cards.find(card => card.customerId === editingCustomer.id)?.id;
+      if (cardId) await db.membershipCards.update(cardId, { customerName: updates.name });
+      await db.auditLog.add({
+        action: 'UPDATE_CUSTOMER_MEMBERSHIP',
+        entity: updates.name,
+        entityId: editingCustomer.id,
+        staffId: currentStaff?.id,
+        staffName: currentStaff?.name,
+        datetime: Date.now(),
+        details: `Updated membership customer details for ${updates.name}`,
+      });
+      toast('Customer details updated');
+      setEditingCustomer(null);
+      setEditForm(emptyCustomer);
+      await load();
+      if (viewingCard?.customerId === editingCustomer.id) {
+        setViewingCard(current => current ? { ...current, customerName: updates.name } : current);
+      }
+    } catch (error) {
+      console.error(error);
+      toast('Could not update customer details', 'error');
+    }
+  }
+
   function exportCardsCsv() {
     const rows = [['cardCode', 'status', 'memberUrl', 'batchName', 'customerName']];
     cards.forEach(card => rows.push([card.cardCode, card.status, getMemberPortalUrl(card.cardCode), card.batchName || '', card.customerName || '']));
@@ -222,6 +270,7 @@ export default function CustomerMembership() {
                     <div className="flex gap-8">
                       {card.customerId && <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); setViewingCard(card); }} title="View Card"><Eye size={14} /></button>}
                       {card.status === 'available' && <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setRegisteringCard(card)} title="Register Sold Card"><UserPlus size={14} /></button>}
+                      {customer && <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); openEditCustomer(customer); }} title="Edit Customer"><Pencil size={14} /></button>}
                       {customer && <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); openHistory(customer); }} title="History"><History size={14} /></button>}
                       {customer && <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); setAdjusting(customer); }} title="Adjust Points"><Gift size={14} /></button>}
                       {card.status === 'active'
@@ -266,6 +315,7 @@ export default function CustomerMembership() {
         <Modal title={`Membership Card ${viewingCard.cardCode}`} large onClose={() => setViewingCard(null)} footer={
           <>
             {viewingCustomer && <button className="btn btn-secondary" onClick={() => openHistory(viewingCustomer)}><History size={14} /> History</button>}
+            {viewingCustomer && <button className="btn btn-secondary" onClick={() => openEditCustomer(viewingCustomer)}><Pencil size={14} /> Edit Customer</button>}
             {viewingCustomer && <button className="btn btn-secondary" onClick={() => setAdjusting(viewingCustomer)}><Gift size={14} /> Adjust Points</button>}
             <button className="btn btn-primary" onClick={() => setViewingCard(null)}>Close</button>
           </>
@@ -305,6 +355,16 @@ export default function CustomerMembership() {
           <div className="form-group"><label className="form-label">Current Points</label><div className="form-input" style={{ background: 'var(--bg-card)' }}>{adjusting.pointsBalance || 0}</div></div>
           <div className="form-group"><label className="form-label">Point Adjustment</label><input className="form-input" type="number" value={adjustPoints} onChange={e => setAdjustPoints(e.target.value)} placeholder="Use negative value to deduct" autoFocus /></div>
           <div className="form-group"><label className="form-label">Reason</label><input className="form-input" value={adjustReason} onChange={e => setAdjustReason(e.target.value)} placeholder="Manual correction, promo, etc." /></div>
+        </Modal>
+      )}
+
+      {editingCustomer && (
+        <Modal title={`Edit Customer - ${editingCustomer.name}`} onClose={() => setEditingCustomer(null)} footer={
+          <><button className="btn btn-secondary" onClick={() => setEditingCustomer(null)}>Cancel</button><button className="btn btn-primary" onClick={saveCustomerDetails}>Save Changes</button></>
+        }>
+          <div className="form-group"><label className="form-label">Customer Name</label><input className="form-input" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} autoFocus /></div>
+          <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} /></div>
+          <div className="form-group"><label className="form-label">Birthday</label><input className="form-input" type="date" value={editForm.birthday || ''} onChange={e => setEditForm({ ...editForm, birthday: e.target.value })} /></div>
         </Modal>
       )}
 
