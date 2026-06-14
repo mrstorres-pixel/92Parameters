@@ -178,7 +178,7 @@ export default function TransactionReport() {
     return (t.receiptNo || '').toLowerCase().includes(q) ||
       (t.staffName || '').toLowerCase().includes(q) ||
       formatPaymentLabel(t).toLowerCase().includes(q) ||
-      (t.items || []).some(item => (item.name || '').toLowerCase().includes(q));
+      (t.items || []).some(item => (item.name || '').toLowerCase().includes(q) || (item.note || '').toLowerCase().includes(q));
   }).filter(t => paymentMethodMatches(t, paymentFilter));
 
   const completed = filtered.filter(t => t.status !== 'void');
@@ -263,7 +263,7 @@ export default function TransactionReport() {
                 <td><div>{formatDate(t.datetime)}</div><div className="text-muted text-sm">{formatTime(t.datetime)}</div></td>
                 <td style={{ fontWeight: 600, color: 'var(--accent)' }}>{t.receiptNo}</td>
                 <td><span className="badge badge-neutral">{t.orderType}</span></td>
-                <td className="truncate" style={{ maxWidth: 200 }}>{(t.items||[]).map(i => `${i.name}×${i.quantity}`).join(', ')}</td>
+                <td className="truncate" style={{ maxWidth: 200 }}>{(t.items||[]).map(i => `${i.name}×${i.quantity}${i.note ? ` (${i.note})` : ''}`).join(', ')}</td>
                 <td>{formatPaymentLabel(t)}</td>
                 <td>{t.staffName || '—'}</td>
                 <td style={{ fontWeight: 600 }}>{formatCurrency(t.total)}</td>
@@ -345,7 +345,10 @@ export default function TransactionReport() {
               <tbody>
                 {(selected.items || []).map((item, i) => (
                   <tr key={i}>
-                    <td>{item.name}</td><td>{item.quantity}</td><td>{formatUnitPrice(item)}</td>
+                    <td>
+                      <div>{item.name}</div>
+                      {item.note && <div className="text-muted text-sm" style={{ whiteSpace: 'pre-wrap' }}>Note: {item.note}</div>}
+                    </td><td>{item.quantity}</td><td>{formatUnitPrice(item)}</td>
                     <td>{formatAdjustment(item.discount, item.discountAmount)}</td>
                     <td>{formatAdjustment(item.markup, item.markupAmount)}</td>
                     <td style={{ fontWeight: 600 }}>{formatCurrency(calcItemTotal(item))}</td>

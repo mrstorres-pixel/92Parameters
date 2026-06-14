@@ -51,7 +51,10 @@ export default function VoidLog() {
                         <h4 style={{ marginBottom: 8, color: 'var(--text-secondary)' }}>Items</h4>
                         {(v.originalData.items || []).map((item, i) => (
                           <div key={i} className="flex-between" style={{ padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
-                            <span>{item.name} × {item.quantity}{item.discount > 0 ? ` (${item.discount}% off)` : ''}</span>
+                            <span>
+                              {item.name} × {item.quantity}{item.discount > 0 ? ` (${item.discount}% off)` : ''}
+                              {item.note && <div className="text-muted text-sm" style={{ whiteSpace: 'pre-wrap' }}>Note: {item.note}</div>}
+                            </span>
                             <span style={{ fontWeight: 600 }}>{formatCurrency(item.price * (1-(item.discount||0)/100) * item.quantity)}</span>
                           </div>
                         ))}

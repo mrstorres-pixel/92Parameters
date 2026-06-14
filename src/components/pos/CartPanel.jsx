@@ -5,7 +5,7 @@ import { formatCurrency } from '../../utils/formatters';
 import { calcItemTotal, calcCartTotal, calcCartSubtotal, calcItemAdjustedPrice } from '../../utils/calculations';
 
 export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBill, checkoutDisabled = false, loyaltyDiscount = 0, loyaltyCustomer = null }) {
-  const { cart, orderType, orderDiscount, orderDiscountAmount, setOrderType, setOrderDiscount, setOrderDiscountAmount, updateQuantity, removeItem, setDiscount, setMarkup, setCustomPrice, clearCart } = usePosStore();
+  const { cart, orderType, orderDiscount, orderDiscountAmount, setOrderType, setOrderDiscount, setOrderDiscountAmount, updateQuantity, removeItem, setDiscount, setMarkup, setCustomPrice, setItemNote, clearCart } = usePosStore();
   const subtotal = calcCartSubtotal(cart);
   const orderTotal = calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0);
   const total = Math.max(0, orderTotal - Number(loyaltyDiscount || 0));
@@ -82,6 +82,16 @@ export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBil
               </button>
               <div className="cart-item-remove" onClick={() => removeItem(item.productId)}><Trash2 size={14} /></div>
             </div>
+            <label className="cart-item-note">
+              <span>Notes / customization</span>
+              <textarea
+                className="form-input"
+                rows={2}
+                placeholder="Ex: less ice, no sugar, separate sauce..."
+                value={item.note || ''}
+                onChange={e => setItemNote(item.productId, e.target.value)}
+              />
+            </label>
             {adjustingItem === item.productId && (
               <div className="item-adjust-panel">
                 <div className="discount-row">

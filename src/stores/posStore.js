@@ -22,7 +22,7 @@ export const usePosStore = create((set, get) => ({
     if (existing) {
       set({ cart: cart.map(i => i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i) });
     } else {
-      set({ cart: [...cart, { productId: product.id, name: product.name, category: product.category, subCategory: product.subCategory, price: product.price, cost: product.cost || 0, quantity: 1, discount: 0, markup: 0, customPrice: 0 }] });
+      set({ cart: [...cart, { productId: product.id, name: product.name, category: product.category, subCategory: product.subCategory, price: product.price, cost: product.cost || 0, quantity: 1, discount: 0, markup: 0, customPrice: 0, note: '' }] });
     }
   },
 
@@ -44,6 +44,9 @@ export const usePosStore = create((set, get) => ({
   setCustomPrice: (productId, amount) => {
     const customPrice = Number(amount || 0);
     set({ cart: get().cart.map(i => i.productId === productId ? { ...i, customPrice, discount: customPrice > 0 ? 0 : i.discount, markup: customPrice > 0 ? 0 : i.markup } : i) });
+  },
+  setItemNote: (productId, note) => {
+    set({ cart: get().cart.map(i => i.productId === productId ? { ...i, note } : i) });
   },
 
   clearCart: () => set({ cart: [], orderType: 'Dine In', orderDiscount: 0, orderMarkup: 0, orderDiscountAmount: 0, orderMarkupAmount: 0 }),

@@ -194,11 +194,12 @@ export default function PointOfSale() {
     if (cart.length === 0) return;
     const tableName = activeBill?.tableName || window.prompt('Table name / number?');
     if (!tableName) return;
+    const items = cart.map(i => ({ ...i, note: (i.note || '').trim() }));
     try {
       const id = await saveRunningBill({
         billId: activeBill?.id,
         tableName,
-        items: cart.map(i => ({ ...i })),
+        items,
         orderType,
         orderDiscount,
         orderMarkup: 0,
@@ -208,7 +209,7 @@ export default function PointOfSale() {
         staff: currentStaff,
         expectedUpdatedAt: activeBill?.updatedAt,
       });
-      setActiveBill({ ...(activeBill || {}), id, tableName, items: cart.map(i => ({ ...i })), orderType, orderDiscount, orderMarkup: 0, orderDiscountAmount, orderMarkupAmount: 0, total: calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0), staffName: currentStaff?.name, updatedAt: Date.now() });
+      setActiveBill({ ...(activeBill || {}), id, tableName, items, orderType, orderDiscount, orderMarkup: 0, orderDiscountAmount, orderMarkupAmount: 0, total: calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0), staffName: currentStaff?.name, updatedAt: Date.now() });
       await refreshBills();
       toast(activeBill ? 'Running bill updated' : 'Running bill saved', 'success');
       clearCart();
@@ -269,9 +270,10 @@ export default function PointOfSale() {
       const method = appliedPaymentLines.length ? formatPaymentLabel(appliedPaymentLines) : 'Loyalty';
       const receiptNo = generateReceiptNo();
       const currentCheckoutKey = checkoutKey || createCheckoutKey();
+      const items = cart.map(i => ({ ...i, note: (i.note || '').trim() }));
       const txn = {
         receiptNo, checkoutKey: currentCheckoutKey, datetime: Date.now(), orderType,
-        items: cart.map(i => ({ ...i })), paymentMethod: method,
+        items, paymentMethod: method,
         paymentLines: appliedPaymentLines,
         orderDiscount, orderMarkup: 0, orderDiscountAmount, orderMarkupAmount: 0, subtotal: calcCartSubtotal(cart),
         customerId: selectedCustomer?.id || null, customerName: selectedCustomer?.name || null, memberCode: selectedCustomer?.memberCode || null,

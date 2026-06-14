@@ -288,6 +288,8 @@ body {
 .cart-item-name { font-size: 0.85rem; font-weight: 500; }
 .cart-item-price { font-size: 0.75rem; color: var(--text-secondary); }
 .cart-item-price .original { text-decoration: line-through; color: var(--text-muted); margin-right: 6px; }
+.cart-item-note { display: grid; gap: 4px; color: var(--text-muted); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; }
+.cart-item-note textarea { min-height: 58px; resize: vertical; padding: 8px 10px; font-size: 0.78rem; text-transform: none; font-weight: 500; }
 .cart-item-qty { display: flex; align-items: center; gap: 6px; }
 .cart-item-qty button { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: var(--transition); }
 .cart-item-qty button:hover { border-color: var(--accent); }

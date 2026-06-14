@@ -44,6 +44,7 @@ export default function ReceiptModal({ transaction, onClose }) {
 
     (t.items || []).forEach(item => {
       rows.push({ type: 'pair', left: `${item.quantity} x ${item.name}`, right: formatReceiptCurrency(calcItemTotal(item)) });
+      if (item.note) rows.push({ type: 'text', text: `  Note: ${item.note}` });
       if (Number(item.discount || 0) > 0) rows.push({ type: 'pair', left: '  Discount', right: `-${item.discount}%` });
       if (Number(item.discountAmount || 0) > 0) rows.push({ type: 'pair', left: '  Cash discount', right: `-${formatReceiptCurrency(item.discountAmount)}` });
     });
@@ -228,6 +229,11 @@ export default function ReceiptModal({ transaction, onClose }) {
               <span>{item.quantity} x {item.name}</span>
               <span>{formatReceiptCurrency(calcItemTotal(item))}</span>
             </div>
+            {item.note && (
+              <div style={{ fontSize: '14px', paddingLeft: '12px', color: '#333', whiteSpace: 'pre-wrap' }}>
+                Note: {item.note}
+              </div>
+            )}
             {hasItemDiscount(item) && (
               <div style={{ fontSize: '14px', paddingLeft: '12px', color: '#333' }}>
                 {Number(item.discount || 0) > 0 && (
