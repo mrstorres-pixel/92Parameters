@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, CalendarDays } from 'lucide-react';
+import { Camera, CalendarDays, Search } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useToast } from '../components/common/Toast';
@@ -26,6 +26,7 @@ export default function TimeTracking() {
   const [filterDate, setFilterDate] = useState(getLocalDateValue());
   const [summaryStart, setSummaryStart] = useState(getMonthStartValue());
   const [summaryEnd, setSummaryEnd] = useState(getLocalDateValue());
+  const [ownerSearch, setOwnerSearch] = useState('');
   const [viewPhoto, setViewPhoto] = useState(null);
   const [pinPrompt, setPinPrompt] = useState(null);
   const [pinValue, setPinValue] = useState('');
@@ -61,14 +62,26 @@ export default function TimeTracking() {
     return `${hrs}h ${mins}m`;
   }
 
+  function getRecordHours(record) {
+    if (!record?.timeIn || !record?.timeOut) return 0;
+    return Math.max(0, (Number(record.timeOut) - Number(record.timeIn)) / 3600000);
+  }
+
+  function getRecordLaborCost(record, person) {
+    if (!record?.timeOut) return 0;
+    const saved = Number(record.salaryEarned || 0);
+    if (saved > 0) return saved;
+    return getRecordHours(record) * Number(person?.hourlyRate || 0);
+  }
+
   function buildAttendanceSummary(staffRows, timeRows) {
     const attendanceStaffRows = staffRows.filter(s => s.role === 'staff' || s.role === 'manager');
     const summaries = attendanceStaffRows.map(person => {
       const personRows = timeRows.filter(r => r.staffId === person.id && r.timeIn);
       const datesWorked = new Set(personRows.map(r => r.date));
       const completedRows = personRows.filter(r => r.timeOut);
-      const hoursWorked = completedRows.reduce((sum, r) => sum + Math.max(0, (Number(r.timeOut) - Number(r.timeIn)) / 3600000), 0);
-      const earned = completedRows.reduce((sum, r) => sum + Number(r.salaryEarned || 0), 0);
+      const hoursWorked = completedRows.reduce((sum, r) => sum + getRecordHours(r), 0);
+      const earned = completedRows.reduce((sum, r) => sum + getRecordLaborCost(r, person), 0);
       return {
         staffId: person.id,
         name: person.name,
@@ -152,8 +165,25 @@ export default function TimeTracking() {
   }
 
   const getStaffName = (id) => staff.find(s => s.id === id)?.name || 'Unknown';
+  const getStaffRole = (id) => staff.find(s => s.id === id)?.role || '';
   const hasActiveTimeIn = (staffId) => records.some(r => r.staffId === staffId && r.timeIn && !r.timeOut);
   const attendanceStaff = staff.filter(s => s.role === 'staff' || s.role === 'manager');
+  const ownerQuery = ownerSearch.trim().toLowerCase();
+  const filteredAttendanceSummary = attendanceSummary.filter(row => {
+    if (!ownerQuery) return true;
+    return row.name.toLowerCase().includes(ownerQuery) || row.role.toLowerCase().includes(ownerQuery);
+  });
+  const filteredRecords = records.filter(record => {
+    if (!ownerQuery) return true;
+    return getStaffName(record.staffId).toLowerCase().includes(ownerQuery) || getStaffRole(record.staffId).toLowerCase().includes(ownerQuery);
+  });
+  const summaryTotals = filteredAttendanceSummary.reduce((totals, row) => ({
+    employees: totals.employees + 1,
+    shifts: totals.shifts + row.shifts,
+    activeShifts: totals.activeShifts + row.activeShifts,
+    hoursWorked: totals.hoursWorked + row.hoursWorked,
+    laborCost: totals.laborCost + row.earned,
+  }), { employees: 0, shifts: 0, activeShifts: 0, hoursWorked: 0, laborCost: 0 });
 
   const isToday = filterDate === getLocalDateValue();
 
@@ -208,6 +238,10 @@ export default function TimeTracking() {
             </div>
             <div className="toolbar" style={{ margin: 0 }}>
               <div className="search-bar" style={{ background: 'var(--bg-card)' }}>
+                <Search size={16} />
+                <input placeholder="Search employee..." value={ownerSearch} onChange={e => setOwnerSearch(e.target.value)} />
+              </div>
+              <div className="search-bar" style={{ background: 'var(--bg-card)' }}>
                 <CalendarDays size={16} />
                 <input type="date" value={summaryStart} onChange={e => setSummaryStart(e.target.value)} />
               </div>
@@ -216,11 +250,17 @@ export default function TimeTracking() {
               </div>
             </div>
           </div>
+          <div className="stat-grid" style={{ marginBottom: 16 }}>
+            <div className="stat-card"><div className="stat-label">Employees</div><div className="stat-value">{summaryTotals.employees}</div></div>
+            <div className="stat-card"><div className="stat-label">Total Hours</div><div className="stat-value">{summaryTotals.hoursWorked.toFixed(2)}h</div></div>
+            <div className="stat-card"><div className="stat-label">Total Labor Cost</div><div className="stat-value">{formatCurrency(summaryTotals.laborCost)}</div></div>
+            <div className="stat-card"><div className="stat-label">Active Shifts</div><div className="stat-value">{summaryTotals.activeShifts}</div></div>
+          </div>
           <div className="table-container">
             <table className="data-table">
-              <thead><tr><th>Staff</th><th>Role</th><th>Days Worked</th><th>Shifts</th><th>Active</th><th>Hours</th><th>Earned</th></tr></thead>
+              <thead><tr><th>Staff</th><th>Role</th><th>Days Worked</th><th>Shifts</th><th>Active</th><th>Total Hours Worked</th><th>Labor Cost</th></tr></thead>
               <tbody>
-                {attendanceSummary.map(row => (
+                {filteredAttendanceSummary.map(row => (
                   <tr key={row.staffId}>
                     <td style={{ fontWeight: 600 }}>{row.name}</td>
                     <td><span className="badge badge-neutral">{row.role}</span></td>
@@ -231,7 +271,7 @@ export default function TimeTracking() {
                     <td style={{ fontWeight: 600, color: 'var(--success)' }}>{formatCurrency(row.earned)}</td>
                   </tr>
                 ))}
-                {attendanceSummary.length === 0 && (
+                {filteredAttendanceSummary.length === 0 && (
                   <tr><td colSpan={7} className="text-center text-muted">No attendance records in this range.</td></tr>
                 )}
               </tbody>
@@ -245,9 +285,9 @@ export default function TimeTracking() {
           <h3 style={{ fontSize: '1rem', marginBottom: 16, color: 'var(--text-secondary)' }}>Records for {filterDate}</h3>
           <div className="table-container">
             <table className="data-table">
-              <thead><tr><th>Staff</th><th>Time In</th><th>Photo In</th><th>Time Out</th><th>Photo Out</th><th>Duration</th><th>Earned</th></tr></thead>
+              <thead><tr><th>Staff</th><th>Time In</th><th>Photo In</th><th>Time Out</th><th>Photo Out</th><th>Duration</th><th>Labor Cost</th></tr></thead>
               <tbody>
-                {records.map(r => (
+                {filteredRecords.map(r => (
                   <tr key={r.id}>
                     <td style={{ fontWeight: 500 }}>{getStaffName(r.staffId)}</td>
                     <td>{r.timeIn ? formatTime(r.timeIn) : '—'}</td>
@@ -255,9 +295,12 @@ export default function TimeTracking() {
                     <td>{r.timeOut ? formatTime(r.timeOut) : <span className="badge badge-success">Active</span>}</td>
                     <td>{r.photoOut ? <img src={r.photoOut} alt="out" onClick={() => setViewPhoto(r.photoOut)} style={{ width: 48, height: 36, borderRadius: 4, objectFit: 'cover', cursor: 'pointer' }} /> : '—'}</td>
                     <td style={{ fontWeight: 600 }}>{getDuration(r.timeIn, r.timeOut)}</td>
-                    <td style={{ fontWeight: 600, color: 'var(--success)' }}>{r.timeOut ? formatCurrency(r.salaryEarned || 0) : '—'}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--success)' }}>{r.timeOut ? formatCurrency(getRecordLaborCost(r, staff.find(s => s.id === r.staffId))) : '—'}</td>
                   </tr>
                 ))}
+                {filteredRecords.length === 0 && (
+                  <tr><td colSpan={7} className="text-center text-muted">No time records match this search.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
