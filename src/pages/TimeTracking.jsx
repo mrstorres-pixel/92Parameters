@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera, CalendarDays, Search } from 'lucide-react';
-import db from '../db/database';
+import db, { supabase } from '../db/database';
 import Modal from '../components/common/Modal';
 import { useToast } from '../components/common/Toast';
 import { useAuthStore } from '../stores/authStore';
@@ -31,8 +31,10 @@ export default function TimeTracking() {
   const [pinPrompt, setPinPrompt] = useState(null);
   const [pinValue, setPinValue] = useState('');
   const [pinError, setPinError] = useState('');
+  const [captureSaving, setCaptureSaving] = useState(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const captureSavingRef = useRef(false);
   const currentStaff = useAuthStore(s => s.currentStaff);
   const isOwner = currentStaff?.role === 'owner';
   const toast = useToast();
@@ -132,41 +134,83 @@ export default function TimeTracking() {
   }
 
   function stopCapture() {
+    if (captureSavingRef.current) return;
     if (stream) stream.getTracks().forEach(t => t.stop());
     setStream(null); setCapturing(null);
   }
 
   async function takePhoto() {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!videoRef.current || !canvasRef.current || !capturing || captureSavingRef.current) return;
+    captureSavingRef.current = true;
+    setCaptureSaving(true);
     const canvas = canvasRef.current;
     canvas.width = 320; canvas.height = 240;
     canvas.getContext('2d').drawImage(videoRef.current, 0, 0, 320, 240);
     const photo = canvas.toDataURL('image/jpeg', 0.7);
     const now = Date.now();
     const today = getLocalDateValue();
+    const selectedStaffId = capturing.staffId;
+    const selectedType = capturing.type;
 
-    if (capturing.type === 'in') {
-      await db.timeRecords.add({ staffId: capturing.staffId, date: today, timeIn: now, photoIn: photo, timeOut: null, photoOut: null, salaryEarned: 0 });
-      toast('Time In recorded!');
-    } else {
-      const rec = records.find(r => r.staffId === capturing.staffId && !r.timeOut);
-      if (rec) {
-        const s = staff.find(x => x.id === capturing.staffId);
+    try {
+      const todayRecords = await db.timeRecords.query({
+        filters: [
+          { field: 'staffId', op: 'eq', value: selectedStaffId },
+          { field: 'date', op: 'eq', value: today },
+        ],
+        orderBy: 'timeIn',
+        ascending: false,
+      });
+      const activeRecord = todayRecords.find(r => r.timeIn && !r.timeOut);
+      const completedRecord = todayRecords.find(r => r.timeIn && r.timeOut);
+
+      if (selectedType === 'in') {
+        if (activeRecord || completedRecord) {
+          toast(activeRecord ? 'Already timed in today.' : 'Already completed time tracking today.', 'error');
+        } else {
+          await db.timeRecords.add({ staffId: selectedStaffId, date: today, timeIn: now, photoIn: photo, timeOut: null, photoOut: null, salaryEarned: 0 });
+          toast('Time In recorded!');
+        }
+      } else if (completedRecord) {
+        toast('Time Out was already recorded today.', 'error');
+      } else if (activeRecord) {
+        const s = staff.find(x => x.id === selectedStaffId);
         const hourlyRate = s?.hourlyRate || 0;
-        const diff = now - rec.timeIn;
+        const diff = now - activeRecord.timeIn;
         const hoursWorked = diff / 3600000; // milliseconds to hours
         const salaryEarned = hoursWorked * hourlyRate;
 
-        await db.timeRecords.update(rec.id, { timeOut: now, photoOut: photo, salaryEarned });
-        toast('Time Out recorded!');
-      } else { toast('No active time-in found', 'error'); }
+        const { data, error } = await supabase
+          .from('time_records')
+          .update({ timeOut: now, photoOut: photo, salaryEarned })
+          .eq('id', activeRecord.id)
+          .is('timeOut', null)
+          .select('id');
+        if (error) throw error;
+        if (!data?.length) {
+          toast('Time Out was already recorded today.', 'error');
+        } else {
+          toast('Time Out recorded!');
+        }
+      } else {
+        toast('No active time-in found', 'error');
+      }
+    } catch (error) {
+      console.error('Time tracking failed:', error);
+      toast(error?.code === '23505' ? 'Time tracking was already recorded today.' : 'Could not save time record. Please try again.', 'error');
+    } finally {
+      captureSavingRef.current = false;
+      setCaptureSaving(false);
+      stopCapture();
+      load();
     }
-    stopCapture(); load();
   }
 
   const getStaffName = (id) => staff.find(s => s.id === id)?.name || 'Unknown';
   const getStaffRole = (id) => staff.find(s => s.id === id)?.role || '';
   const hasActiveTimeIn = (staffId) => records.some(r => r.staffId === staffId && r.timeIn && !r.timeOut);
+  const hasTimeRecordToday = (staffId) => records.some(r => r.staffId === staffId && r.timeIn);
+  const hasCompletedTimeRecordToday = (staffId) => records.some(r => r.staffId === staffId && r.timeIn && r.timeOut);
   const attendanceStaff = staff.filter(s => s.role === 'staff' || s.role === 'manager');
   const ownerQuery = ownerSearch.trim().toLowerCase();
   const filteredAttendanceSummary = attendanceSummary.filter(row => {
@@ -204,6 +248,8 @@ export default function TimeTracking() {
           <div className="time-grid" style={{ marginBottom: 32 }}>
             {attendanceStaff.map(s => {
               const active = hasActiveTimeIn(s.id);
+              const completed = hasCompletedTimeRecordToday(s.id);
+              const hasRecord = hasTimeRecordToday(s.id);
               return (
                 <div key={s.id} className="staff-card">
                   {s.profileImage ? (
@@ -212,9 +258,9 @@ export default function TimeTracking() {
                     <div className="staff-avatar">{s.name.charAt(0)}</div>
                   )}
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{s.name}</div>
-                  <span className={`badge ${active ? 'badge-success' : 'badge-neutral'}`}>{active ? 'Clocked In' : 'Clocked Out'}</span>
+                  <span className={`badge ${active ? 'badge-success' : 'badge-neutral'}`}>{active ? 'Clocked In' : completed ? 'Completed Today' : 'Clocked Out'}</span>
                   <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-                    <button className="btn btn-primary btn-sm" disabled={active} onClick={() => startCapture(s.id, 'in')}>Time In</button>
+                    <button className="btn btn-primary btn-sm" disabled={hasRecord} onClick={() => startCapture(s.id, 'in')}>Time In</button>
                     <button className="btn btn-secondary btn-sm" disabled={!active} onClick={() => startCapture(s.id, 'out')}>Time Out</button>
                   </div>
                 </div>
@@ -339,7 +385,7 @@ export default function TimeTracking() {
 
       {capturing && (
         <Modal title={`Time ${capturing.type === 'in' ? 'In' : 'Out'} - ${getStaffName(capturing.staffId)}`} onClose={stopCapture} footer={
-          <><button className="btn btn-secondary" onClick={stopCapture}>Cancel</button><button className="btn btn-primary" onClick={takePhoto}><Camera size={16} /> Capture</button></>
+          <><button className="btn btn-secondary" onClick={stopCapture} disabled={captureSaving}>Cancel</button><button className="btn btn-primary" onClick={takePhoto} disabled={captureSaving}><Camera size={16} /> {captureSaving ? 'Saving...' : 'Capture'}</button></>
         }>
           <div className="webcam-container">
             <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', borderRadius: 'var(--radius)' }} />
