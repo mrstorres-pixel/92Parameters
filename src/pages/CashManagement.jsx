@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUpCircle, ArrowDownCircle, CalendarDays, Search } from 'lucide-react';
+import { ArrowUpCircle, ArrowDownCircle, BarChart3, CalendarDays, Search } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useAuthStore } from '../stores/authStore';
@@ -27,6 +27,7 @@ export default function CashManagement() {
   const [cashSales, setCashSales] = useState([]);
   const [monthlyEntries, setMonthlyEntries] = useState([]);
   const [showForm, setShowForm] = useState(null); // 'in' | 'out'
+  const [showMonthlyReport, setShowMonthlyReport] = useState(false);
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
   const [filterDate, setFilterDate] = useState(toDateInputValue(new Date()));
@@ -111,6 +112,7 @@ export default function CashManagement() {
         <h2>Cash Drawer</h2>
         <div className="flex gap-8">
           <input className="form-input" type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={{ width: 160 }} />
+          <button className="btn btn-secondary" onClick={() => setShowMonthlyReport(true)}><BarChart3 size={16} /> Monthly Reports</button>
           <button className="btn btn-success" onClick={() => setShowForm('in')}><ArrowUpCircle size={16} /> Cash In</button>
           <button className="btn btn-danger" onClick={() => setShowForm('out')}><ArrowDownCircle size={16} /> Cash Out</button>
         </div>
@@ -144,13 +146,15 @@ export default function CashManagement() {
         </table>
       </div>
 
-      <section style={{ marginTop: 32 }}>
-        <div className="page-header" style={{ marginBottom: 16 }}>
+      {showMonthlyReport && (
+        <Modal title="Monthly Cash Movement Report" large onClose={() => setShowMonthlyReport(false)} footer={
+          <button className="btn btn-primary" onClick={() => setShowMonthlyReport(false)}>Done</button>
+        }>
+        <div style={{ marginBottom: 16 }}>
           <div>
-            <h3 style={{ fontSize: '1rem', marginBottom: 4 }}>Monthly Cash Movement Report</h3>
             <p className="text-muted text-sm">Search notes like salary, supplies, delivery, or any cash drawer reason.</p>
           </div>
-          <div className="toolbar" style={{ margin: 0 }}>
+          <div className="toolbar" style={{ marginTop: 12 }}>
             <div className="search-bar" style={{ background: 'var(--bg-card)' }}>
               <Search size={16} />
               <input placeholder="Search notes, staff, type..." value={reportSearch} onChange={e => setReportSearch(e.target.value)} />
@@ -188,7 +192,8 @@ export default function CashManagement() {
             </tbody>
           </table>
         </div>
-      </section>
+        </Modal>
+      )}
 
       {showForm && (
         <Modal title={showForm === 'in' ? 'Cash In' : 'Cash Out'} onClose={() => setShowForm(null)} footer={
