@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { ArrowUpCircle, ArrowDownCircle, CalendarDays, Search } from 'lucide-react';
 import db from '../db/database';
 import Modal from '../components/common/Modal';
 import { useAuthStore } from '../stores/authStore';
@@ -11,17 +11,33 @@ function toDateInputValue(date) {
   return date.toISOString().slice(0, 10);
 }
 
+function toMonthInputValue(date = new Date()) {
+  return date.toISOString().slice(0, 7);
+}
+
+function getMonthBounds(monthValue) {
+  const [year, month] = monthValue.split('-').map(Number);
+  const start = new Date(year, month - 1, 1).getTime();
+  const end = new Date(year, month, 0, 23, 59, 59, 999).getTime();
+  return { start, end };
+}
+
 export default function CashManagement() {
   const [entries, setEntries] = useState([]);
   const [cashSales, setCashSales] = useState([]);
+  const [monthlyEntries, setMonthlyEntries] = useState([]);
   const [showForm, setShowForm] = useState(null); // 'in' | 'out'
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
   const [filterDate, setFilterDate] = useState(toDateInputValue(new Date()));
+  const [reportMonth, setReportMonth] = useState(toMonthInputValue());
+  const [reportSearch, setReportSearch] = useState('');
   const currentStaff = useAuthStore(s => s.currentStaff);
   const toast = useToast();
 
   useEffect(() => { load(); }, [filterDate]);
+  useEffect(() => { loadMonthlyReport(); }, [reportMonth]);
+
   async function load() {
     const start = new Date(`${filterDate}T00:00:00`).getTime();
     const end = new Date(`${filterDate}T23:59:59.999`).getTime();
@@ -48,6 +64,19 @@ export default function CashManagement() {
     setCashSales(saleRows);
   }
 
+  async function loadMonthlyReport() {
+    const { start, end } = getMonthBounds(reportMonth);
+    const rows = await db.cashDrawer.query({
+      filters: [
+        { field: 'datetime', op: 'gte', value: start },
+        { field: 'datetime', op: 'lte', value: end },
+      ],
+      orderBy: 'datetime',
+      ascending: false,
+    });
+    setMonthlyEntries(rows);
+  }
+
   async function save() {
     if (!amount || Number(amount) <= 0) return;
     await db.cashDrawer.add({
@@ -55,13 +84,26 @@ export default function CashManagement() {
       staffId: currentStaff?.id, staffName: currentStaff?.name, datetime: Date.now(),
     });
     toast(`Cash ${showForm} recorded`);
-    setShowForm(null); setAmount(''); setNotes(''); load();
+    setShowForm(null); setAmount(''); setNotes(''); load(); loadMonthlyReport();
   }
 
   const totalIn = entries.filter(e => e.type === 'in').reduce((s,e) => s + e.amount, 0);
   const totalOut = entries.filter(e => e.type === 'out').reduce((s,e) => s + e.amount, 0);
   const cashSalesTotal = cashSales.reduce((sum, sale) => sum + sumPaymentMethod(sale, 'Cash'), 0);
   const expectedCash = totalIn + cashSalesTotal - totalOut;
+  const reportQuery = reportSearch.trim().toLowerCase();
+  const filteredMonthlyEntries = monthlyEntries.filter(entry => {
+    if (!reportQuery) return true;
+    return [
+      entry.notes,
+      entry.staffName,
+      entry.type === 'in' ? 'cash in' : 'cash out',
+      formatCurrency(entry.amount),
+    ].some(value => String(value || '').toLowerCase().includes(reportQuery));
+  });
+  const monthlyIn = filteredMonthlyEntries.filter(e => e.type === 'in').reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const monthlyOut = filteredMonthlyEntries.filter(e => e.type === 'out').reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const monthlyNet = monthlyIn - monthlyOut;
 
   return (
     <div className="animate-fade">
@@ -101,6 +143,52 @@ export default function CashManagement() {
           </tbody>
         </table>
       </div>
+
+      <section style={{ marginTop: 32 }}>
+        <div className="page-header" style={{ marginBottom: 16 }}>
+          <div>
+            <h3 style={{ fontSize: '1rem', marginBottom: 4 }}>Monthly Cash Movement Report</h3>
+            <p className="text-muted text-sm">Search notes like salary, supplies, delivery, or any cash drawer reason.</p>
+          </div>
+          <div className="toolbar" style={{ margin: 0 }}>
+            <div className="search-bar" style={{ background: 'var(--bg-card)' }}>
+              <Search size={16} />
+              <input placeholder="Search notes, staff, type..." value={reportSearch} onChange={e => setReportSearch(e.target.value)} />
+            </div>
+            <div className="search-bar" style={{ background: 'var(--bg-card)' }}>
+              <CalendarDays size={16} />
+              <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} />
+            </div>
+          </div>
+        </div>
+
+        <div className="stat-grid">
+          <div className="stat-card"><div className="stat-label">Report Cash In</div><div className="stat-value" style={{ color: 'var(--success)' }}>{formatCurrency(monthlyIn)}</div></div>
+          <div className="stat-card"><div className="stat-label">Report Cash Out</div><div className="stat-value" style={{ color: 'var(--danger)' }}>{formatCurrency(monthlyOut)}</div></div>
+          <div className="stat-card"><div className="stat-label">Net Movement</div><div className="stat-value">{formatCurrency(monthlyNet)}</div></div>
+          <div className="stat-card"><div className="stat-label">Matching Records</div><div className="stat-value">{filteredMonthlyEntries.length}</div></div>
+        </div>
+
+        <div className="table-container">
+          <table className="data-table">
+            <thead><tr><th>Date/Time</th><th>Type</th><th>Amount</th><th>Notes</th><th>Staff</th></tr></thead>
+            <tbody>
+              {filteredMonthlyEntries.map(e => (
+                <tr key={e.id}>
+                  <td>{formatDateTime(e.datetime)}</td>
+                  <td><span className={`badge ${e.type === 'in' ? 'badge-success' : 'badge-danger'}`}>{e.type === 'in' ? 'Cash In' : 'Cash Out'}</span></td>
+                  <td style={{ fontWeight: 600 }}>{formatCurrency(e.amount)}</td>
+                  <td>{e.notes || '—'}</td>
+                  <td>{e.staffName || 'Unknown'}</td>
+                </tr>
+              ))}
+              {filteredMonthlyEntries.length === 0 && (
+                <tr><td colSpan={5} className="text-center text-muted" style={{ padding: 24 }}>No cash drawer records match this report.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {showForm && (
         <Modal title={showForm === 'in' ? 'Cash In' : 'Cash Out'} onClose={() => setShowForm(null)} footer={
