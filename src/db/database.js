@@ -31,11 +31,12 @@ function buildTable(tableName) {
       if (error) console.error(`Error fetching ${tableName}:`, error);
       return data || [];
     },
-    async query({ select = '*', filters = [], orderBy, ascending = true, limit, offset = 0 } = {}) {
+    async query({ select = '*', filters = [], orderBy, ascending = true, limit, offset = 0, throwOnError = false } = {}) {
       let query = applyFilters(supabase.from(tableName).select(select), filters);
       if (orderBy) query = query.order(orderBy, { ascending });
       if (typeof limit === 'number') query = query.range(offset, offset + limit - 1);
       const { data, error } = await query;
+      if (error && throwOnError) throw error;
       if (error) console.error(`Error querying ${tableName}:`, error);
       return data || [];
     },

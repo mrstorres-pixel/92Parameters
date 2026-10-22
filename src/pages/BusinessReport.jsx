@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import db from '../db/database';
 import { formatCurrency } from '../utils/formatters';
-import { calcGrossProfit, calcItemTotal } from '../utils/calculations';
+import { calcGrossProfit } from '../utils/calculations';
+import { buildMerchandiseSummary, buildCashOutSummary, fetchReportRows } from '../utils/businessReport';
 import { getDateRangeFilters } from '../utils/durability';
 import { buildPaymentTotals, PAYMENT_METHODS, paymentMethodMatches } from '../utils/payments';
 
 const COLORS = ['#d4982a', '#f59e0b', '#34d399', '#60a5fa', '#a78bfa', '#f87171'];
 
 function toDateInputValue(date) {
-  return date.toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 function getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackUnit) {
@@ -19,8 +20,8 @@ function getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackU
   start.setHours(0,0,0,0);
   end.setHours(23,59,59,999);
 
-  if (range === 'week') start.setDate(start.getDate() - 7);
-  else if (range === 'month') start.setMonth(start.getMonth() - 1);
+  if (range === 'week') start.setDate(start.getDate() - 6);
+  else if (range === 'month') start.setDate(start.getDate() - 29);
   else if (range === 'year') start.setFullYear(start.getFullYear() - 1);
   else if (range === 'lookback') {
     const amount = Math.max(1, Number(lookbackAmount || 1));
@@ -45,21 +46,37 @@ export default function BusinessReport() {
   const [lookbackAmount, setLookbackAmount] = useState(8);
   const [lookbackUnit, setLookbackUnit] = useState('months');
   const [txns, setTxns] = useState([]);
-  const [stats, setStats] = useState({ revenue: 0, cost: 0, profit: 0 });
+  const [cashEntries, setCashEntries] = useState([]);
+  const [loadState, setLoadState] = useState('loading');
+  const [reloadAttempt, setReloadAttempt] = useState(0);
 
-  useEffect(() => { load(); }, [range, customStart, customEnd, lookbackAmount, lookbackUnit]);
-
-  async function load() {
-    const { start, end } = getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackUnit);
-    const all = await db.transactions.query({
-      filters: getDateRangeFilters(start, end),
-      orderBy: 'datetime',
-      ascending: true,
-      limit: 5000,
-    });
-    setTxns(all);
-    setStats(calcGrossProfit(all));
-  }
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      setLoadState('loading');
+      const { start, end } = getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackUnit);
+      if (start > end) {
+        if (active) setLoadState('invalid');
+        return;
+      }
+      try {
+        const filters = getDateRangeFilters(start, end);
+        const [all, cashOuts] = await Promise.all([
+          fetchReportRows(db.transactions, filters),
+          fetchReportRows(db.cashDrawer, [...filters, { field: 'type', op: 'eq', value: 'out' }]),
+        ]);
+        if (!active) return;
+        setTxns(all);
+        setCashEntries(cashOuts);
+        setLoadState('ready');
+      } catch (error) {
+        console.error('Could not load business report:', error);
+        if (active) setLoadState('error');
+      }
+    }
+    load();
+    return () => { active = false; };
+  }, [range, customStart, customEnd, lookbackAmount, lookbackUnit, reloadAttempt]);
 
   const { start, end } = getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackUnit);
 
@@ -67,49 +84,20 @@ export default function BusinessReport() {
   const paymentMethods = ['All', ...PAYMENT_METHODS];
   const valid = validAll.filter(t => paymentMethodMatches(t, paymentFilter));
   const filteredStats = calcGrossProfit(valid);
-  const totalSales = valid.reduce((s,t) => s + (t.total || 0), 0);
+  const totalSales = filteredStats.revenue;
   const avgTicket = valid.length ? totalSales / valid.length : 0;
-  const totalItems = valid.reduce((s,t) => s + (t.items || []).reduce((a,i) => a + i.quantity, 0), 0);
-
-  // Sales by category
-  const catMap = {};
-  valid.forEach(t => (t.items||[]).forEach(i => {
-    const cat = i.category || 'Other';
-    catMap[cat] = (catMap[cat] || 0) + calcItemTotal(i);
-  }));
-  const catQtyMap = {};
-  const catCostMap = {};
-  valid.forEach(t => (t.items||[]).forEach(i => {
-    const cat = i.category || 'Other';
-    const qty = Number(i.quantity || 1);
-    catQtyMap[cat] = (catQtyMap[cat] || 0) + qty;
-    catCostMap[cat] = (catCostMap[cat] || 0) + Number(i.cost || 0) * qty;
-  }));
-  const catData = Object.entries(catMap).map(([name, value]) => ({ name, value: Math.round(value) }));
-  const tabRows = Object.entries(catMap).map(([name, grossSales]) => ({
-    name,
-    quantity: catQtyMap[name] || 0,
-    grossSales,
-    cost: catCostMap[name] || 0,
-    netSales: grossSales - (catCostMap[name] || 0),
-  })).sort((a, b) => b.grossSales - a.grossSales);
+  const { totalItems, categoryRows: tabRows, categoryData: catData, topProducts, categoryTotals } = buildMerchandiseSummary(valid);
+  const { totalCashOut, netAfterCashOut } = buildCashOutSummary(validAll, cashEntries);
 
   // Payment breakdown
   const payRows = Object.entries(buildPaymentTotals(validAll)).map(([name, totals]) => ({ name, quantity: totals.quantity, value: totals.amount })).sort((a, b) => b.value - a.value);
-  const payData = payRows.map(({ name, value }) => ({ name, value: Math.round(value) }));
+  const payData = payRows.filter(row => row.value > 0).map(({ name, value }) => ({ name, value }));
   const payTotalQty = payRows.reduce((sum, row) => sum + row.quantity, 0);
   const payTotalAmount = payRows.reduce((sum, row) => sum + row.value, 0);
 
-  // Top products
-  const prodMap = {};
-  valid.forEach(t => (t.items||[]).forEach(i => {
-    prodMap[i.name] = (prodMap[i.name] || 0) + i.quantity;
-  }));
-  const topProducts = Object.entries(prodMap).map(([name, qty]) => ({ name, qty })).sort((a,b) => b.qty - a.qty).slice(0, 8);
-
   // Hourly sales
   const hourMap = {};
-  valid.forEach(t => { const h = new Date(t.datetime).getHours(); hourMap[h] = (hourMap[h] || 0) + t.total; });
+  valid.forEach(t => { const h = new Date(t.datetime).getHours(); hourMap[h] = (hourMap[h] || 0) + Number(t.total || 0); });
   const hourData = Array.from({length: 24}, (_, h) => ({ hour: `${h}:00`, sales: Math.round(hourMap[h] || 0) })).filter(d => d.sales > 0);
 
   const tooltipStyle = { contentStyle: { background: '#231f19', border: '1px solid #3a332a', borderRadius: 8, color: '#f5e6d0', fontSize: '0.8rem' } };
@@ -155,13 +143,29 @@ export default function BusinessReport() {
         <span className="text-sm text-muted">{paymentFilter === 'All' ? 'Showing all settlements' : `Showing ${paymentFilter} sales only`}</span>
       </div>
 
+      <p className="text-sm text-muted mb-16">Report period: {start.toLocaleDateString()} to {end.toLocaleDateString()}</p>
+      {loadState === 'loading' && <div className="card" role="status">Loading business report...</div>}
+      {loadState === 'invalid' && <div className="alert-banner alert-warning" role="alert">Choose an end date on or after the start date.</div>}
+      {loadState === 'error' && (
+        <div className="alert-banner alert-warning" role="alert">
+          <span>Could not load sales and cash-outs. Try again to get a complete report.</span>
+          <button className="btn btn-secondary" onClick={() => setReloadAttempt(attempt => attempt + 1)}>Try again</button>
+        </div>
+      )}
+      {loadState === 'ready' && <>
       <div className="stat-grid">
         <div className="stat-card"><div className="stat-label">Total Sales</div><div className="stat-value">{formatCurrency(totalSales)}</div></div>
         <div className="stat-card"><div className="stat-label">Transactions</div><div className="stat-value">{valid.length}</div></div>
         <div className="stat-card"><div className="stat-label">Avg Ticket</div><div className="stat-value">{formatCurrency(avgTicket)}</div></div>
         <div className="stat-card"><div className="stat-label">Items Sold</div><div className="stat-value">{totalItems}</div></div>
         <div className="stat-card"><div className="stat-label">Cost of Goods</div><div className="stat-value">{formatCurrency(filteredStats.cost)}</div></div>
-        <div className="stat-card"><div className="stat-label">Gross Profit</div><div className="stat-value" style={{ color: 'var(--success)' }}>{formatCurrency(filteredStats.profit)}</div></div>
+        <div className="stat-card"><div className="stat-label">Gross Profit</div><div className="stat-value" style={{ color: filteredStats.profit < 0 ? 'var(--danger)' : 'var(--success)' }}>{formatCurrency(filteredStats.profit)}</div></div>
+        <div className="stat-card"><div className="stat-label">Total Cash Out</div><div className="stat-value" style={{ color: 'var(--danger)' }}>{formatCurrency(totalCashOut)}</div><div className="text-sm text-muted">All payment methods · selected period</div></div>
+        <div className="stat-card"><div className="stat-label">Net after Cash-outs</div><div className="stat-value" style={{ color: netAfterCashOut < 0 ? 'var(--danger)' : 'var(--success)' }}>{formatCurrency(netAfterCashOut)}</div><div className="text-sm text-muted">All sales − total cash out</div></div>
+      </div>
+
+      <div className="alert-banner alert-info mb-24">
+        <span>Net after cash-outs = sales across all payment methods − recorded cash-outs for this period. It is not net profit: cash-outs also include stock purchases and owner withdrawals. Cost of goods is shown separately and is not deducted again here.</span>
       </div>
 
       <div className="report-grid">
@@ -172,6 +176,8 @@ export default function BusinessReport() {
               <tr><th>Total Sales</th><td>{formatCurrency(totalSales)}</td></tr>
               <tr><th>Total Cost</th><td>{formatCurrency(filteredStats.cost)}</td></tr>
               <tr><th>Gross Profit</th><td>{formatCurrency(filteredStats.profit)}</td></tr>
+              <tr><th>Total Cash Out (all payment methods)</th><td>{formatCurrency(totalCashOut)}</td></tr>
+              <tr><th>Net after Cash-outs (all payment methods)</th><td>{formatCurrency(netAfterCashOut)}</td></tr>
               <tr><th>Transactions</th><td>{valid.length}</td></tr>
               <tr><th>Items Sold</th><td>{totalItems}</td></tr>
               <tr><th>Average Ticket</th><td>{formatCurrency(avgTicket)}</td></tr>
@@ -194,31 +200,32 @@ export default function BusinessReport() {
       </div>
 
       <div className="card report-table-card mb-16">
-        <div className="card-title mb-16">Sales by Tab</div>
+        <div className="card-title mb-16">Category Breakdown</div>
+        <p className="text-sm text-muted mb-16">Packaging is excluded from items sold, top products, and category breakdowns. Its charges and costs remain in financial totals. Item sales include item adjustments; order discounts are reflected in Total Sales.</p>
         <table className="data-table compact-table mobile-card-table">
-          <thead><tr><th>Tab</th><th>Quantity Sold</th><th className="text-right">Gross Sales</th><th className="text-right">Cost</th><th className="text-right">Net Sales</th></tr></thead>
+          <thead><tr><th>Category</th><th>Quantity Sold</th><th className="text-right">Item Sales</th><th className="text-right">Cost</th><th className="text-right">Item Profit</th></tr></thead>
           <tbody>
             {tabRows.map(row => (
               <tr key={row.name}>
-                <td data-label="Tab">{row.name}</td>
+                <td data-label="Category">{row.name}</td>
                 <td data-label="Quantity Sold">{row.quantity}</td>
-                <td data-label="Gross Sales" className="text-right">{formatCurrency(row.grossSales)}</td>
+                <td data-label="Item Sales" className="text-right">{formatCurrency(row.grossSales)}</td>
                 <td data-label="Cost" className="text-right">{formatCurrency(row.cost)}</td>
-                <td data-label="Net Sales" className="text-right">{formatCurrency(row.netSales)}</td>
+                <td data-label="Item Profit" className="text-right">{formatCurrency(row.netSales)}</td>
               </tr>
             ))}
             <tr>
-              <td data-label="Tab" style={{ fontWeight: 700 }}>Total</td>
+              <td data-label="Category" style={{ fontWeight: 700 }}>Total</td>
               <td data-label="Quantity Sold" style={{ fontWeight: 700 }}>{totalItems}</td>
-              <td data-label="Gross Sales" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(totalSales)}</td>
-              <td data-label="Cost" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(filteredStats.cost)}</td>
-              <td data-label="Net Sales" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(filteredStats.profit)}</td>
+              <td data-label="Item Sales" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(categoryTotals.grossSales)}</td>
+              <td data-label="Cost" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(categoryTotals.cost)}</td>
+              <td data-label="Item Profit" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(categoryTotals.netSales)}</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+      <div className="report-grid">
         <div className="card">
           <div className="card-title mb-16">Hourly Sales</div>
           <ResponsiveContainer width="100%" height={220}>
@@ -235,22 +242,23 @@ export default function BusinessReport() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="report-grid">
         <div className="card">
           <div className="card-title mb-16">Top Products</div>
-          <ResponsiveContainer width="100%" height={220}>
+          {topProducts.length === 0 ? <p className="text-sm text-muted">No product sales in this selection.</p> : <ResponsiveContainer width="100%" height={220}>
             <BarChart data={topProducts} layout="vertical"><XAxis type="number" tick={{ fill: '#7a6e5f', fontSize: 11 }} /><YAxis dataKey="name" type="category" width={120} tick={{ fill: '#b8a692', fontSize: 11 }} /><Tooltip {...tooltipStyle} /><Bar dataKey="qty" fill="#34d399" radius={[0,4,4,0]} /></BarChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer>}
         </div>
         <div className="card">
           <div className="card-title mb-16">Sales by Category</div>
-          <ResponsiveContainer width="100%" height={220}>
+          {catData.length === 0 ? <p className="text-sm text-muted">No category sales in this selection.</p> : <ResponsiveContainer width="100%" height={220}>
             <PieChart><Pie data={catData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({name, percent}) => `${name} ${(percent*100).toFixed(0)}%`}>
               {catData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
             </Pie><Tooltip {...tooltipStyle} /></PieChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer>}
         </div>
       </div>
+      </>}
     </div>
   );
 }
