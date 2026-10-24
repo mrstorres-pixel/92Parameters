@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import db from '../db/database';
 import { formatCurrency } from '../utils/formatters';
 import { calcGrossProfit } from '../utils/calculations';
-import { buildMerchandiseSummary, buildCashOutSummary, fetchReportRows } from '../utils/businessReport';
+import { buildMerchandiseSummary, buildCashOutSummary, buildOperatingProfitSummary, fetchReportRows } from '../utils/businessReport';
 import { getDateRangeFilters } from '../utils/durability';
 import { buildPaymentTotals, PAYMENT_METHODS, paymentMethodMatches } from '../utils/payments';
 
@@ -88,6 +89,7 @@ export default function BusinessReport() {
   const avgTicket = valid.length ? totalSales / valid.length : 0;
   const { totalItems, categoryRows: tabRows, categoryData: catData, topProducts, categoryTotals } = buildMerchandiseSummary(valid);
   const { totalCashOut, netAfterCashOut } = buildCashOutSummary(validAll, cashEntries);
+  const operatingProfit = buildOperatingProfitSummary(validAll, cashEntries);
 
   // Payment breakdown
   const payRows = Object.entries(buildPaymentTotals(validAll)).map(([name, totals]) => ({ name, quantity: totals.quantity, value: totals.amount })).sort((a, b) => b.value - a.value);
@@ -166,6 +168,44 @@ export default function BusinessReport() {
 
       <div className="alert-banner alert-info mb-24">
         <span>Net after cash-outs = sales across all payment methods − recorded cash-outs for this period. It is not net profit: cash-outs also include stock purchases and owner withdrawals. Cost of goods is shown separately and is not deducted again here.</span>
+      </div>
+
+      <div className="report-grid">
+        <div className="card report-table-card">
+          <div className="card-title mb-16">Estimated Operating Profit</div>
+          <div className="stat-value" style={{ color: operatingProfit.estimatedOperatingProfit < 0 ? 'var(--danger)' : 'var(--success)' }}>{formatCurrency(operatingProfit.estimatedOperatingProfit)}</div>
+          <p className="text-sm text-muted mb-16">All payment methods · selected report period</p>
+          <table className="summary-table">
+            <tbody>
+              <tr><th>Total Sales</th><td>{formatCurrency(operatingProfit.revenue)}</td></tr>
+              <tr><th>Less: Cost of Goods Sold</th><td>{formatCurrency(operatingProfit.cost)}</td></tr>
+              <tr><th>Gross Profit</th><td>{formatCurrency(operatingProfit.grossProfit)}</td></tr>
+              <tr><th>Less: Categorized Operating Expenses</th><td>{formatCurrency(operatingProfit.operatingExpenses)}</td></tr>
+              <tr><th>Estimated Operating Profit</th><td>{formatCurrency(operatingProfit.estimatedOperatingProfit)}</td></tr>
+            </tbody>
+          </table>
+          <p className="text-sm text-muted" style={{ marginTop: 16 }}>Uses recorded product costs and cash-outs categorized as operating expenses. This estimate may omit unpaid expenses, expenses paid elsewhere and depreciation. It is before income tax and financing costs.</p>
+        </div>
+        <div className="card report-table-card">
+          <div className="card-title mb-16">Cash-out Categories</div>
+          <p className="text-sm text-muted mb-16">All payment methods · selected report period</p>
+          <table className="summary-table">
+            <tbody>
+              <tr><th>Operating Expenses</th><td>{formatCurrency(operatingProfit.operatingExpenses)}</td></tr>
+              <tr><th>Stock Purchases</th><td>{formatCurrency(operatingProfit.stockPurchases)}</td></tr>
+              <tr><th>Owner Withdrawals</th><td>{formatCurrency(operatingProfit.ownerWithdrawals)}</td></tr>
+              <tr><th>Unclassified Cash-outs</th><td>{formatCurrency(operatingProfit.unclassifiedAmount)}</td></tr>
+              <tr><th>Total Cash Out</th><td>{formatCurrency(totalCashOut)}</td></tr>
+            </tbody>
+          </table>
+          {operatingProfit.unclassifiedCount > 0 ? (
+            <div className="alert-banner alert-warning" role="status" style={{ marginTop: 16 }}>
+              <span>Provisional estimate: {operatingProfit.unclassifiedCount} cash-out{operatingProfit.unclassifiedCount === 1 ? '' : 's'} totaling {formatCurrency(operatingProfit.unclassifiedAmount)} need category review. These amounts have not been deducted as operating expenses.</span>
+            </div>
+          ) : <p className="text-sm text-muted" style={{ marginTop: 16 }}>All recorded cash-outs for this period are categorized.</p>}
+          <p className="text-sm text-muted" style={{ marginTop: 16 }}>Stock purchases are accounted for through the cost of goods sold. Owner withdrawals are kept separate from expenses.</p>
+          <Link to="/cash" className="btn btn-secondary" style={{ marginTop: 16 }}>Review in Cash Drawer / Monthly Reports</Link>
+        </div>
       </div>
 
       <div className="report-grid">

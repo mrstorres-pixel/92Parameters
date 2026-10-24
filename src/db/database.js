@@ -128,7 +128,17 @@ const db = {
   runningBills: buildTable('running_bills'),
   dailySalesSummary: buildTable('daily_sales_summary'),
   ingredientMovements: buildTable('ingredient_movements'),
-  cashDrawer: buildTable('cash_drawer'),
+  cashDrawer: {
+    ...buildTable('cash_drawer'),
+    async setCategory(id, category) {
+      const { data, error } = await supabase.from('cash_drawer')
+        .update({ category }).eq('id', id).eq('type', 'out')
+        .select('id, category').single();
+      handleMutationError('cash_drawer', 'classifying', error);
+      if (!data || data.category !== category) throw new Error('Cash-out category was not saved.');
+      return data;
+    },
+  },
   timeRecords: buildTable('time_records'),
   voidLog: buildTable('void_log'),
   auditLog: buildTable('audit_log'),

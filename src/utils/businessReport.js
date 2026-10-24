@@ -1,4 +1,5 @@
 import { calcGrossProfit, calcItemTotal } from './calculations.js';
+import { summarizeCashOutCategories } from './cashOutCategories.js';
 
 const normalizeCategory = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const packagingCategories = new Set(['takeoutbox', 'takeoutboxes', 'packaging', 'paperbag', 'paperbags']);
@@ -46,6 +47,18 @@ export function buildCashOutSummary(transactions, cashEntries) {
   const { revenue } = calcGrossProfit(transactions);
   const totalCashOut = cashEntries.filter(entry => entry.type === 'out').reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   return { totalCashOut, netAfterCashOut: revenue - totalCashOut };
+}
+
+export function buildOperatingProfitSummary(transactions, cashEntries) {
+  const gross = calcGrossProfit(transactions);
+  const cashOuts = summarizeCashOutCategories(cashEntries);
+  return {
+    ...cashOuts,
+    revenue: gross.revenue,
+    cost: gross.cost,
+    grossProfit: gross.profit,
+    estimatedOperatingProfit: gross.profit - cashOuts.operatingExpenses,
+  };
 }
 
 // Read every page so long date ranges cannot silently truncate financial totals.
