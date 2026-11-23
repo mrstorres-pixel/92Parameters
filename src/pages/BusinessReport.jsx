@@ -1,304 +1,534 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import db from '../db/database';
-import { formatCurrency } from '../utils/formatters';
-import { calcGrossProfit } from '../utils/calculations';
-import { buildMerchandiseSummary, buildCashOutSummary, buildOperatingProfitSummary, fetchReportRows } from '../utils/businessReport';
-import { getDateRangeFilters } from '../utils/durability';
-import { buildPaymentTotals, PAYMENT_METHODS, paymentMethodMatches } from '../utils/payments';
-
-const COLORS = ['#d4982a', '#f59e0b', '#34d399', '#60a5fa', '#a78bfa', '#f87171'];
-
-function toDateInputValue(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackUnit) {
-  const now = new Date();
-  let start = new Date();
-  let end = new Date(now);
-  start.setHours(0,0,0,0);
-  end.setHours(23,59,59,999);
-
-  if (range === 'week') start.setDate(start.getDate() - 6);
-  else if (range === 'month') start.setDate(start.getDate() - 29);
-  else if (range === 'year') start.setFullYear(start.getFullYear() - 1);
-  else if (range === 'lookback') {
-    const amount = Math.max(1, Number(lookbackAmount || 1));
-    if (lookbackUnit === 'years') start.setFullYear(start.getFullYear() - amount);
-    else if (lookbackUnit === 'months') start.setMonth(start.getMonth() - amount);
-    else start.setDate(start.getDate() - amount);
-  } else if (range === 'custom') {
-    start = customStart ? new Date(`${customStart}T00:00:00`) : new Date(0);
-    end = customEnd ? new Date(`${customEnd}T23:59:59.999`) : new Date(now);
-  } else if (range === 'all') {
-    start = new Date(0);
-  }
-
-  return { start, end };
-}
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import useReport from "../hooks/useReport";
+import {
+  businessDate,
+  reportRange,
+  reportDateTime,
+} from "../utils/reportDates";
+import {
+  businessBreakdowns,
+  money,
+  periodParams,
+  reportMetrics,
+} from "../utils/reporting";
+import {
+  ReportFrame,
+  ReportState,
+  ReportPeriod,
+  Metric,
+  MoneyTable,
+  BarPanel,
+} from "../components/reports/ReportUI";
+import ReviewReportItem from "../components/reports/ReviewReportItem";
 
 export default function BusinessReport() {
-  const [range, setRange] = useState('today');
-  const [paymentFilter, setPaymentFilter] = useState('All');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState(toDateInputValue(new Date()));
-  const [lookbackAmount, setLookbackAmount] = useState(8);
-  const [lookbackUnit, setLookbackUnit] = useState('months');
-  const [txns, setTxns] = useState([]);
-  const [cashEntries, setCashEntries] = useState([]);
-  const [loadState, setLoadState] = useState('loading');
-  const [reloadAttempt, setReloadAttempt] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      setLoadState('loading');
-      const { start, end } = getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackUnit);
-      if (start > end) {
-        if (active) setLoadState('invalid');
-        return;
-      }
-      try {
-        const filters = getDateRangeFilters(start, end);
-        const [all, cashOuts] = await Promise.all([
-          fetchReportRows(db.transactions, filters),
-          fetchReportRows(db.cashDrawer, [...filters, { field: 'type', op: 'eq', value: 'out' }]),
-        ]);
-        if (!active) return;
-        setTxns(all);
-        setCashEntries(cashOuts);
-        setLoadState('ready');
-      } catch (error) {
-        console.error('Could not load business report:', error);
-        if (active) setLoadState('error');
-      }
-    }
-    load();
-    return () => { active = false; };
-  }, [range, customStart, customEnd, lookbackAmount, lookbackUnit, reloadAttempt]);
-
-  const { start, end } = getRangeBounds(range, customStart, customEnd, lookbackAmount, lookbackUnit);
-
-  const validAll = txns.filter(t => t.status !== 'void');
-  const paymentMethods = ['All', ...PAYMENT_METHODS];
-  const valid = validAll.filter(t => paymentMethodMatches(t, paymentFilter));
-  const filteredStats = calcGrossProfit(valid);
-  const totalSales = filteredStats.revenue;
-  const avgTicket = valid.length ? totalSales / valid.length : 0;
-  const { totalItems, categoryRows: tabRows, categoryData: catData, topProducts, categoryTotals } = buildMerchandiseSummary(valid);
-  const { totalCashOut, netAfterCashOut } = buildCashOutSummary(validAll, cashEntries);
-  const operatingProfit = buildOperatingProfitSummary(validAll, cashEntries);
-
-  // Payment breakdown
-  const payRows = Object.entries(buildPaymentTotals(validAll)).map(([name, totals]) => ({ name, quantity: totals.quantity, value: totals.amount })).sort((a, b) => b.value - a.value);
-  const payData = payRows.filter(row => row.value > 0).map(({ name, value }) => ({ name, value }));
-  const payTotalQty = payRows.reduce((sum, row) => sum + row.quantity, 0);
-  const payTotalAmount = payRows.reduce((sum, row) => sum + row.value, 0);
-
-  // Hourly sales
-  const hourMap = {};
-  valid.forEach(t => { const h = new Date(t.datetime).getHours(); hourMap[h] = (hourMap[h] || 0) + Number(t.total || 0); });
-  const hourData = Array.from({length: 24}, (_, h) => ({ hour: `${h}:00`, sales: Math.round(hourMap[h] || 0) })).filter(d => d.sales > 0);
-
-  const tooltipStyle = { contentStyle: { background: '#231f19', border: '1px solid #3a332a', borderRadius: 8, color: '#f5e6d0', fontSize: '0.8rem' } };
-
+  const [range, setRange] = useState("today"),
+    [customStart, setStart] = useState(""),
+    [customEnd, setEnd] = useState(businessDate());
+  const [lookbackAmount, setAmount] = useState(8),
+    [lookbackUnit, setUnit] = useState("months");
+  const [tab, setTab] = useState("overview"),
+    [payment, setPayment] = useState("All"),
+    [reload, setReload] = useState(0),
+    [review, setReview] = useState(null);
+  let bounds, rangeError;
+  try {
+    bounds = reportRange({
+      range,
+      customStart,
+      customEnd,
+      lookbackAmount,
+      lookbackUnit,
+    });
+  } catch (error) {
+    rangeError = error.message;
+  }
+  const state = useReport(
+    "report_business_v2",
+    bounds ? periodParams(bounds) : {},
+    reload,
+    Boolean(bounds),
+  );
+  const data = state.data,
+    metrics = data ? reportMetrics(data) : null,
+    breakdown = data ? businessBreakdowns(data) : null;
+  const refresh = () => setReload((value) => value + 1);
+  const paidTotal =
+    breakdown?.payments.reduce((sum, row) => sum + row.salesCents, 0) || 0;
   return (
-    <div className="animate-fade">
-      <div className="page-header">
-        <h2>Business Report</h2>
-        <div className="tabs" style={{ marginBottom: 0 }}>
-          {[['today','Today'],['week','7 Days'],['month','30 Days'],['year','Last Year'],['lookback','Look Back'],['custom','Custom'],['all','All Time']].map(([k,l]) => (
-            <button key={k} className={`tab ${range === k ? 'active' : ''}`} onClick={() => setRange(k)}>{l}</button>
-          ))}
-        </div>
-      </div>
-
-      {(range === 'lookback' || range === 'custom') && (
-        <div className="toolbar">
-          {range === 'lookback' && (
-            <>
-              <input className="form-input" style={{ width: 100 }} type="number" min="1" value={lookbackAmount} onChange={e => setLookbackAmount(e.target.value)} />
-              <select className="form-select" style={{ width: 140 }} value={lookbackUnit} onChange={e => setLookbackUnit(e.target.value)}>
-                <option value="days">Days ago</option>
-                <option value="months">Months ago</option>
-                <option value="years">Years ago</option>
-              </select>
-            </>
-          )}
-          {range === 'custom' && (
-            <>
-              <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">From</label><input className="form-input" type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} /></div>
-              <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">To</label><input className="form-input" type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} /></div>
-            </>
-          )}
-          <span className="text-sm text-muted">Showing {start.toLocaleDateString()} to {end.toLocaleDateString()}</span>
-        </div>
-      )}
-
-      <div className="toolbar">
-        <span className="text-sm text-muted">Payment method:</span>
-        <select className="form-select" style={{ width: 190 }} value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)}>
-          {paymentMethods.map(method => <option key={method} value={method}>{method}</option>)}
-        </select>
-        <span className="text-sm text-muted">{paymentFilter === 'All' ? 'Showing all settlements' : `Showing ${paymentFilter} sales only`}</span>
-      </div>
-
-      <p className="text-sm text-muted mb-16">Report period: {start.toLocaleDateString()} to {end.toLocaleDateString()}</p>
-      {loadState === 'loading' && <div className="card" role="status">Loading business report...</div>}
-      {loadState === 'invalid' && <div className="alert-banner alert-warning" role="alert">Choose an end date on or after the start date.</div>}
-      {loadState === 'error' && (
-        <div className="alert-banner alert-warning" role="alert">
-          <span>Could not load sales and cash-outs. Try again to get a complete report.</span>
-          <button className="btn btn-secondary" onClick={() => setReloadAttempt(attempt => attempt + 1)}>Try again</button>
-        </div>
-      )}
-      {loadState === 'ready' && <>
-      <div className="stat-grid">
-        <div className="stat-card"><div className="stat-label">Total Sales</div><div className="stat-value">{formatCurrency(totalSales)}</div></div>
-        <div className="stat-card"><div className="stat-label">Transactions</div><div className="stat-value">{valid.length}</div></div>
-        <div className="stat-card"><div className="stat-label">Avg Ticket</div><div className="stat-value">{formatCurrency(avgTicket)}</div></div>
-        <div className="stat-card"><div className="stat-label">Items Sold</div><div className="stat-value">{totalItems}</div></div>
-        <div className="stat-card"><div className="stat-label">Cost of Goods</div><div className="stat-value">{formatCurrency(filteredStats.cost)}</div></div>
-        <div className="stat-card"><div className="stat-label">Gross Profit</div><div className="stat-value" style={{ color: filteredStats.profit < 0 ? 'var(--danger)' : 'var(--success)' }}>{formatCurrency(filteredStats.profit)}</div></div>
-        <div className="stat-card"><div className="stat-label">Total Cash Out</div><div className="stat-value" style={{ color: 'var(--danger)' }}>{formatCurrency(totalCashOut)}</div><div className="text-sm text-muted">All payment methods · selected period</div></div>
-        <div className="stat-card"><div className="stat-label">Net after Cash-outs</div><div className="stat-value" style={{ color: netAfterCashOut < 0 ? 'var(--danger)' : 'var(--success)' }}>{formatCurrency(netAfterCashOut)}</div><div className="text-sm text-muted">All sales − total cash out</div></div>
-      </div>
-
-      <div className="alert-banner alert-info mb-24">
-        <span>Net after cash-outs = sales across all payment methods − recorded cash-outs for this period. It is not net profit: cash-outs also include stock purchases and owner withdrawals. Cost of goods is shown separately and is not deducted again here.</span>
-      </div>
-
-      <div className="report-grid">
-        <div className="card report-table-card">
-          <div className="card-title mb-16">Estimated Operating Profit</div>
-          <div className="stat-value" style={{ color: operatingProfit.estimatedOperatingProfit < 0 ? 'var(--danger)' : 'var(--success)' }}>{formatCurrency(operatingProfit.estimatedOperatingProfit)}</div>
-          <p className="text-sm text-muted mb-16">All payment methods · selected report period</p>
-          <table className="summary-table">
-            <tbody>
-              <tr><th>Total Sales</th><td>{formatCurrency(operatingProfit.revenue)}</td></tr>
-              <tr><th>Less: Cost of Goods Sold</th><td>{formatCurrency(operatingProfit.cost)}</td></tr>
-              <tr><th>Gross Profit</th><td>{formatCurrency(operatingProfit.grossProfit)}</td></tr>
-              <tr><th>Less: Categorized Operating Expenses</th><td>{formatCurrency(operatingProfit.operatingExpenses)}</td></tr>
-              <tr><th>Estimated Operating Profit</th><td>{formatCurrency(operatingProfit.estimatedOperatingProfit)}</td></tr>
-            </tbody>
-          </table>
-          <p className="text-sm text-muted" style={{ marginTop: 16 }}>Uses recorded product costs and cash-outs categorized as operating expenses. This estimate may omit unpaid expenses, expenses paid elsewhere and depreciation. It is before income tax and financing costs.</p>
-        </div>
-        <div className="card report-table-card">
-          <div className="card-title mb-16">Cash-out Categories</div>
-          <p className="text-sm text-muted mb-16">All payment methods · selected report period</p>
-          <table className="summary-table">
-            <tbody>
-              <tr><th>Operating Expenses</th><td>{formatCurrency(operatingProfit.operatingExpenses)}</td></tr>
-              <tr><th>Stock Purchases</th><td>{formatCurrency(operatingProfit.stockPurchases)}</td></tr>
-              <tr><th>Owner Withdrawals</th><td>{formatCurrency(operatingProfit.ownerWithdrawals)}</td></tr>
-              <tr><th>Unclassified Cash-outs</th><td>{formatCurrency(operatingProfit.unclassifiedAmount)}</td></tr>
-              <tr><th>Total Cash Out</th><td>{formatCurrency(totalCashOut)}</td></tr>
-            </tbody>
-          </table>
-          {operatingProfit.unclassifiedCount > 0 ? (
-            <div className="alert-banner alert-warning" role="status" style={{ marginTop: 16 }}>
-              <span>Provisional estimate: {operatingProfit.unclassifiedCount} cash-out{operatingProfit.unclassifiedCount === 1 ? '' : 's'} totaling {formatCurrency(operatingProfit.unclassifiedAmount)} need category review. These amounts have not been deducted as operating expenses.</span>
-            </div>
-          ) : <p className="text-sm text-muted" style={{ marginTop: 16 }}>All recorded cash-outs for this period are categorized.</p>}
-          <p className="text-sm text-muted" style={{ marginTop: 16 }}>Stock purchases are accounted for through the cost of goods sold. Owner withdrawals are kept separate from expenses.</p>
-          <Link to="/cash" className="btn btn-secondary" style={{ marginTop: 16 }}>Review in Cash Drawer / Monthly Reports</Link>
-        </div>
-      </div>
-
-      <div className="report-grid">
-        <div className="card report-table-card">
-          <div className="card-title mb-16">Sales Information</div>
-          <table className="summary-table">
-            <tbody>
-              <tr><th>Total Sales</th><td>{formatCurrency(totalSales)}</td></tr>
-              <tr><th>Total Cost</th><td>{formatCurrency(filteredStats.cost)}</td></tr>
-              <tr><th>Gross Profit</th><td>{formatCurrency(filteredStats.profit)}</td></tr>
-              <tr><th>Total Cash Out (all payment methods)</th><td>{formatCurrency(totalCashOut)}</td></tr>
-              <tr><th>Net after Cash-outs (all payment methods)</th><td>{formatCurrency(netAfterCashOut)}</td></tr>
-              <tr><th>Transactions</th><td>{valid.length}</td></tr>
-              <tr><th>Items Sold</th><td>{totalItems}</td></tr>
-              <tr><th>Average Ticket</th><td>{formatCurrency(avgTicket)}</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div className="card report-table-card">
-          <div className="card-title mb-16">Total Settlement by Payment Method</div>
-          <table className="data-table compact-table mobile-card-table">
-            <thead><tr><th>Method</th><th>Quantity</th><th className="text-right">Amount</th></tr></thead>
-            <tbody>
-              {payRows.map(row => (
-                <tr key={row.name}><td data-label="Method">{row.name}</td><td data-label="Quantity">{row.quantity}</td><td data-label="Amount" className="text-right">{formatCurrency(row.value)}</td></tr>
-              ))}
-              <tr><td data-label="Method" style={{ fontWeight: 700 }}>Total Settlement</td><td data-label="Quantity" style={{ fontWeight: 700 }}>{payTotalQty}</td><td data-label="Amount" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(payTotalAmount)}</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card report-table-card mb-16">
-        <div className="card-title mb-16">Category Breakdown</div>
-        <p className="text-sm text-muted mb-16">Packaging is excluded from items sold, top products, and category breakdowns. Its charges and costs remain in financial totals. Item sales include item adjustments; order discounts are reflected in Total Sales.</p>
-        <table className="data-table compact-table mobile-card-table">
-          <thead><tr><th>Category</th><th>Quantity Sold</th><th className="text-right">Item Sales</th><th className="text-right">Cost</th><th className="text-right">Item Profit</th></tr></thead>
-          <tbody>
-            {tabRows.map(row => (
-              <tr key={row.name}>
-                <td data-label="Category">{row.name}</td>
-                <td data-label="Quantity Sold">{row.quantity}</td>
-                <td data-label="Item Sales" className="text-right">{formatCurrency(row.grossSales)}</td>
-                <td data-label="Cost" className="text-right">{formatCurrency(row.cost)}</td>
-                <td data-label="Item Profit" className="text-right">{formatCurrency(row.netSales)}</td>
-              </tr>
+    <ReportFrame
+      title="Business Report"
+      generatedAt={data?.generatedAt}
+      onRefresh={refresh}
+    >
+      <ReportPeriod
+        {...{
+          range,
+          customStart,
+          customEnd,
+          lookbackAmount,
+          lookbackUnit,
+          bounds,
+        }}
+        onRange={setRange}
+        onStart={setStart}
+        onEnd={setEnd}
+        onAmount={setAmount}
+        onUnit={setUnit}
+        error={rangeError}
+      />
+      {!rangeError && <ReportState state={state} />}
+      {data && !rangeError && (
+        <>
+          <div
+            className="report-section-tabs"
+            role="tablist"
+            aria-label="Business report sections"
+            onKeyDown={(event) => {
+              if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+              const tabs=[...event.currentTarget.querySelectorAll('[role="tab"]')];
+              const current=tabs.indexOf(document.activeElement);
+              if(current<0)return;
+              event.preventDefault();
+              const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(current+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+              tabs[next].click();tabs[next].focus();
+            }}
+          >
+            {[
+              ["overview", "Overview"],
+              ["sales", "Sales & Payments"],
+              ["profit", "Profit & Expenses"],
+              ["review", "Data Review"],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={tab === key}
+                tabIndex={tab === key ? 0 : -1}
+                aria-controls={`report-${key}`}
+                id={`tab-${key}`}
+                onClick={() => setTab(key)}
+              >
+                {label}
+                {key === "review" &&
+                metrics.issueCount + metrics.unclassifiedCount > 0
+                  ? ` (${metrics.issueCount + metrics.unclassifiedCount})`
+                  : ""}
+              </button>
             ))}
-            <tr>
-              <td data-label="Category" style={{ fontWeight: 700 }}>Total</td>
-              <td data-label="Quantity Sold" style={{ fontWeight: 700 }}>{totalItems}</td>
-              <td data-label="Item Sales" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(categoryTotals.grossSales)}</td>
-              <td data-label="Cost" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(categoryTotals.cost)}</td>
-              <td data-label="Item Profit" className="text-right" style={{ fontWeight: 700 }}>{formatCurrency(categoryTotals.netSales)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div className="report-grid">
-        <div className="card">
-          <div className="card-title mb-16">Hourly Sales</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={hourData}><XAxis dataKey="hour" tick={{ fill: '#7a6e5f', fontSize: 11 }} /><YAxis tick={{ fill: '#7a6e5f', fontSize: 11 }} /><Tooltip {...tooltipStyle} /><Bar dataKey="sales" fill="#d4982a" radius={[4,4,0,0]} /></BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="card">
-          <div className="card-title mb-16">Payment Methods</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart><Pie data={payData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" label={({name, percent}) => `${name} ${(percent*100).toFixed(0)}%`}>
-              {payData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-            </Pie><Tooltip {...tooltipStyle} /></PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="report-grid">
-        <div className="card">
-          <div className="card-title mb-16">Top Products</div>
-          {topProducts.length === 0 ? <p className="text-sm text-muted">No product sales in this selection.</p> : <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={topProducts} layout="vertical"><XAxis type="number" tick={{ fill: '#7a6e5f', fontSize: 11 }} /><YAxis dataKey="name" type="category" width={120} tick={{ fill: '#b8a692', fontSize: 11 }} /><Tooltip {...tooltipStyle} /><Bar dataKey="qty" fill="#34d399" radius={[0,4,4,0]} /></BarChart>
-          </ResponsiveContainer>}
-        </div>
-        <div className="card">
-          <div className="card-title mb-16">Sales by Category</div>
-          {catData.length === 0 ? <p className="text-sm text-muted">No category sales in this selection.</p> : <ResponsiveContainer width="100%" height={220}>
-            <PieChart><Pie data={catData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({name, percent}) => `${name} ${(percent*100).toFixed(0)}%`}>
-              {catData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-            </Pie><Tooltip {...tooltipStyle} /></PieChart>
-          </ResponsiveContainer>}
-        </div>
-      </div>
-      </>}
-    </div>
+          </div>
+          <div
+            role="tabpanel"
+            id={`report-${tab}`}
+            aria-labelledby={`tab-${tab}`}
+          >
+            {tab === "overview" && (
+              <>
+                <div className="report-metrics">
+                  <Metric
+                    label="Sales"
+                    value={
+                      metrics.salesReady
+                        ? money(metrics.salesCents)
+                        : "Needs review"
+                    }
+                    note="Completed customer sales, after discounts"
+                  />
+                  <Metric
+                    label="Customer Transactions"
+                    value={metrics.transactionCount}
+                    note={`${metrics.freeCustomerCount} fully discounted customer sales included`}
+                  />
+                  <Metric
+                    label="Average Customer Sale"
+                    value={
+                      metrics.salesReady
+                        ? money(
+                            metrics.transactionCount
+                              ? Math.round(
+                                  metrics.salesCents / metrics.transactionCount,
+                                )
+                              : 0,
+                          )
+                        : "Needs review"
+                    }
+                  />
+                  <Metric
+                    label="Customer Items Sold"
+                    value={metrics.customerItems}
+                    note="Excludes packaging and waste"
+                  />
+                </div>
+                {!metrics.profitReady && (
+                  <div className="report-notice report-notice-warning">
+                    <h2>Profit pending review</h2>
+                    <p>
+                      {metrics.unclassifiedCount} unclassified cash-outs (
+                      {money(metrics.unclassifiedCents)}) and{" "}
+                      {metrics.issueCount} receipt or cash-data issues need
+                      review. A profit amount is hidden until these inputs are
+                      resolved.
+                    </p>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => setTab("review")}
+                    >
+                      Review outstanding records
+                    </button>
+                  </div>
+                )}
+                <div className="report-columns">
+                  <BarPanel
+                    title="Customer sales by hour"
+                    rows={breakdown.hours.filter((row) => row.salesCents > 0)}
+                    description="Exact receipt amounts grouped by Philippine hour."
+                  />
+                  <BarPanel
+                    title="Top customer products"
+                    rows={breakdown.products.slice(0, 8)}
+                    valueKey="quantity"
+                    quantity
+                    description="Quantity sold. Packaging and milk/waste are excluded."
+                  />
+                </div>
+                <p className="report-help">
+                  {metrics.wasteRecordCount} waste-only records are separate
+                  from customer transactions. Sales use POS-recorded amounts; no
+                  separate tax amount is recorded.
+                </p>
+              </>
+            )}
+            {tab === "sales" && (
+              <>
+                <div className="report-columns">
+                  <BarPanel
+                    title="Sales by category"
+                    rows={breakdown.categories}
+                    description="Includes packaging revenue. Receipt discounts and loyalty reductions are allocated to reconcile exactly to sales."
+                  />
+                  <article className="report-panel">
+                    <h2>Category reconciliation</h2>
+                    <div className="report-table-wrap">
+                      <table className="report-table">
+                        <thead>
+                          <tr>
+                            <th>Category</th>
+                            <th>Quantity</th>
+                            <th>Sales after discounts</th>
+                            <th>Recorded cost</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {breakdown.categories.map((row) => (
+                            <tr key={row.name}>
+                              <th scope="row">{row.name}</th>
+                              <td>{row.quantity}</td>
+                              <td>{money(row.salesCents)}</td>
+                              <td>
+                                {row.costReady
+                                  ? money(row.costCents)
+                                  : "Needs review"}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="report-total">
+                            <th>Total including packaging</th>
+                            <td>—</td>
+                            <td>
+                              {metrics.salesReady
+                                ? money(metrics.salesCents)
+                                : "Needs review"}
+                            </td>
+                            <td>
+                              {metrics.costReady
+                                ? money(metrics.cogsCents)
+                                : "Needs review"}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </article>
+                </div>
+                <article className="report-panel">
+                  <h2>Recorded payment portions</h2>
+                  <p className="report-help">
+                    POS-recorded payments, not confirmation of bank or
+                    delivery-platform payouts. This filter affects only the
+                    payment breakdown.
+                  </p>
+                  <label className="report-field report-inline">
+                    Payment method
+                    <select
+                      value={payment}
+                      onChange={(e) => setPayment(e.target.value)}
+                    >
+                      <option>All</option>
+                      {breakdown.payments.map((row) => (
+                        <option key={row.name}>{row.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="report-table-wrap">
+                    <table className="report-table">
+                      <thead>
+                        <tr>
+                          <th>Method</th>
+                          <th>Receipts using method</th>
+                          <th>Recorded amount</th>
+                          <th>Share of payments</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {breakdown.payments
+                          .filter(
+                            (row) => payment === "All" || payment === row.name,
+                          )
+                          .map((row) => (
+                            <tr key={row.name}>
+                              <th>{row.name}</th>
+                              <td>{row.quantity}</td>
+                              <td>{money(row.salesCents)}</td>
+                              <td>
+                                {(paidTotal
+                                  ? (100 * row.salesCents) / paidTotal
+                                  : 0
+                                ).toFixed(1)}
+                                %
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="report-help">
+                    {metrics.freeCustomerCount} fully discounted customer
+                    receipts have no payment amount. Split-payment receipt
+                    counts must not be added across methods.
+                  </p>
+                </article>
+                <BarPanel
+                  title="Payment amounts"
+                  rows={breakdown.payments.filter(
+                    (row) => payment === "All" || payment === row.name,
+                  )}
+                />
+              </>
+            )}
+            {tab === "profit" && (
+              <div className="report-columns">
+                <article className="report-panel">
+                  <h2>Operating profit</h2>
+                  <p className="report-help">
+                    All payment methods · {bounds.startDate} to {bounds.endDate}
+                  </p>
+                  <MoneyTable
+                    rows={[
+                      [
+                        "Sales after discounts",
+                        metrics.salesReady
+                          ? metrics.salesCents
+                          : "Needs review",
+                      ],
+                      [
+                        "Less: cost of goods sold",
+                        metrics.costReady ? metrics.cogsCents : "Needs review",
+                      ],
+                      [
+                        "Gross profit",
+                        metrics.salesReady && metrics.costReady
+                          ? metrics.grossProfitCents
+                          : "Pending cost review",
+                        true,
+                      ],
+                      [
+                        "Reviewed operating cash-out expenses",
+                        metrics.operatingCashOutCents,
+                      ],
+                      [
+                        "Recorded waste expense",
+                        metrics.costReady
+                          ? metrics.wasteCents
+                          : "Needs cost review",
+                      ],
+                      [
+                        "Operating profit",
+                        metrics.profitReady
+                          ? metrics.operatingProfitCents
+                          : "Profit pending review",
+                        true,
+                      ],
+                    ]}
+                  />
+                  <p className="report-help">
+                    Product costs include ingredients. Waste is deducted once,
+                    separately from goods sold. Stock purchases and owner
+                    withdrawals are not operating expenses. This recorded result
+                    is before tax and financing costs; unrecorded expenses and
+                    depreciation are not included.
+                  </p>
+                  {!metrics.profitReady && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => setTab("review")}
+                    >
+                      Review profit inputs
+                    </button>
+                  )}
+                </article>
+                <article className="report-panel">
+                  <h2>Physical cash-out breakdown</h2>
+                  <MoneyTable
+                    rows={[
+                      ["Operating expenses", metrics.operatingCashOutCents],
+                      ["Stock purchases", metrics.stockPurchaseCents],
+                      ["Owner withdrawals", metrics.ownerWithdrawalCents],
+                      [
+                        "Unclassified — needs review",
+                        metrics.unclassifiedCents,
+                      ],
+                      [
+                        "Total cash out",
+                        metrics.cashReady
+                          ? metrics.cashOutCents
+                          : "Needs review",
+                        true,
+                      ],
+                    ]}
+                  />
+                  <Link to="/cash?review=1">
+                    Review cash-out categories in Monthly Reports
+                  </Link>
+                  <h2 className="report-spaced-heading">
+                    Recorded drawer movement
+                  </h2>
+                  <MoneyTable
+                    rows={[
+                      [
+                        "Cash portions of customer sales",
+                        metrics.cashReady
+                          ? metrics.cashSalesCents
+                          : "Needs payment review",
+                      ],
+                      ["Manual cash in", metrics.cashInCents],
+                      ["Less: cash out", metrics.cashOutCents],
+                      [
+                        "Recorded drawer movement",
+                        metrics.cashReady
+                          ? metrics.drawerMovementCents
+                          : "Pending cash review",
+                        true,
+                      ],
+                    ]}
+                  />
+                  <p className="report-help">
+                    Movement only. This is not profit, a counted drawer balance,
+                    or total collections across all payment methods.
+                  </p>
+                </article>
+              </div>
+            )}
+            {tab === "review" && (
+              <>
+                <div className="report-notice">
+                  <h2>
+                    {metrics.profitReady
+                      ? "Report inputs reconcile"
+                      : "Profit pending review"}
+                  </h2>
+                  <p>
+                    Reviewed costs and complete expense records are required.
+                    Suggestions from notes do not count as reviewed categories.
+                  </p>
+                  <Link to="/cash?review=1">
+                    Review {metrics.unclassifiedCount} unclassified cash-outs (
+                    {money(metrics.unclassifiedCents)})
+                  </Link>
+                </div>
+                <article className="report-panel">
+                  <h2>Receipt and cost issues</h2>
+                  {!breakdown.issues.length ? (
+                    <p>No unresolved receipt issues in this period.</p>
+                  ) : (
+                    <div className="report-table-wrap">
+                      <table className="report-table">
+                        <thead>
+                          <tr>
+                            <th>Receipt / date</th>
+                            <th>Item</th>
+                            <th>Review needed</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {breakdown.issues.map((issue, index) => (
+                            <tr key={index}>
+                              <td>
+                                {issue.transaction.receiptNo ||
+                                  issue.transaction.id}
+                                <br />
+                                <small>
+                                  {reportDateTime(issue.transaction.datetime)}
+                                </small>
+                              </td>
+                              <td>
+                                {issue.line?.name || "Receipt / payments"}
+                              </td>
+                              <td>
+                                {issue.message}
+                                {issue.differenceCents != null && (
+                                  <div>
+                                    Difference: {money(issue.differenceCents)}
+                                  </div>
+                                )}
+                              </td>
+                              <td>
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => setReview(issue)}
+                                >
+                                  Review record
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </article>
+                {data.cashEntries.some(
+                  (row) =>
+                    row.amountCents == null ||
+                    row.amountCents <= 0 ||
+                    !["in", "out"].includes(row.type),
+                ) && (
+                  <div className="report-notice report-notice-warning">
+                    Cash records have invalid amounts or types.{" "}
+                    <Link to="/cash">Review the original cash records</Link>{" "}
+                    before relying on totals.
+                  </div>
+                )}
+                <p className="report-help">
+                  Owner-PIN-confirmed reviews are recorded separately with a
+                  reason and timestamp.
+                </p>
+              </>
+            )}
+          </div>
+          {review && (
+            <ReviewReportItem
+              issue={review}
+              onClose={() => setReview(null)}
+              onSaved={() => {
+                setReview(null);
+                refresh();
+              }}
+            />
+          )}
+        </>
+      )}
+    </ReportFrame>
   );
 }

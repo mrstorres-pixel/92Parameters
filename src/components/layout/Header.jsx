@@ -34,7 +34,7 @@ export default function Header() {
       </div>
       <div className="header-right">
         <span className="header-clock">
-          {time.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })} • {time.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+          {time.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric' })} • {time.toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
         </span>
         {currentStaff && (
           <div className="header-staff">
