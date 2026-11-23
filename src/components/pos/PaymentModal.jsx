@@ -5,6 +5,8 @@ import Modal from '../common/Modal';
 import { formatCurrency } from '../../utils/formatters';
 import { calcChange } from '../../utils/calculations';
 import { formatPaymentLabel } from '../../utils/payments';
+import {secureBackend} from '../../utils/secureApi';
+import PaymentProofCapture from './PaymentProofCapture';
 
 const methods = [
   { id: 'Cash', icon: Banknote, label: 'Cash' },
@@ -15,15 +17,18 @@ const methods = [
   { id: 'Foodpanda', icon: ShoppingBag, label: 'Foodpanda' },
 ];
 
-export default function PaymentModal({ total, onConfirm, onClose, isProcessing = false }) {
+export default function PaymentModal({ total: rawTotal, onConfirm, onClose, isProcessing = false,checkoutKey,sendFood=false }) {
+  const total=Math.round(Number(rawTotal)*100)/100;
+  const [proofs,setProofs]=useState({});
   const [paymentLines, setPaymentLines] = useState([{ method: 'Cash', amount: '' }]);
-  const paidTotal = paymentLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  const paidTotal = paymentLines.reduce((sum, line) => sum + Math.round(Number(line.amount || 0)*100), 0)/100;
   const remaining = Math.max(0, Number(total || 0) - paidTotal);
   const cashPaid = paymentLines.filter(line => line.method === 'Cash').reduce((sum, line) => sum + Number(line.amount || 0), 0);
-  const nonCashPaid = paidTotal - cashPaid;
+  const nonCashPaid = Math.round((paidTotal - cashPaid)*100)/100;
   const change = calcChange(paidTotal, total);
   const hasCash = paymentLines.some(line => line.method === 'Cash');
-  const canConfirm = !isProcessing && paidTotal >= total && nonCashPaid <= total && (paidTotal <= total || hasCash);
+  const required=paymentLines.filter(line=>['Card','Bank Transfer'].includes(line.method)&&Number(line.amount)>0);
+  const canConfirm = !isProcessing && paidTotal >= total && nonCashPaid <= total && (paidTotal <= total || hasCash) && (!secureBackend || required.every(line=>proofs[line.method]?.amountCents===Math.round(Number(line.amount)*100)));
 
   const quickAmounts = [50, 100, 200, 500, 1000].filter(a => a >= total);
 
@@ -33,6 +38,7 @@ export default function PaymentModal({ total, onConfirm, onClose, isProcessing =
 
   function toggleMethod(methodId) {
     if (isProcessing) return;
+    setProofs(current=>({...current,[methodId]:null}));
     setPaymentLines(current => {
       if (current.some(line => line.method === methodId)) {
         if (current.length === 1) return current;
@@ -48,10 +54,12 @@ export default function PaymentModal({ total, onConfirm, onClose, isProcessing =
   }
 
   function setLineAmount(methodId, amount) {
+    setProofs(current=>({...current,[methodId]:null}));
     setPaymentLines(current => current.map(line => line.method === methodId ? { ...line, amount } : line));
   }
 
   function fillRemaining(methodId) {
+    setProofs(current=>({...current,[methodId]:null}));
     setPaymentLines(current => {
       const otherPaid = current
         .filter(line => line.method !== methodId)
@@ -63,16 +71,16 @@ export default function PaymentModal({ total, onConfirm, onClose, isProcessing =
 
   return (
     <Modal title="Payment" onClose={onClose} footer={
-      <button className="btn btn-primary btn-lg w-full" disabled={!canConfirm} onClick={() => onConfirm(paymentLines.map(line => ({ method: line.method, amount: Number(line.amount || 0) })).filter(line => line.amount > 0), cashPaid || null)}>
-        {isProcessing ? 'Processing...' : 'Complete Payment'}
+      <button className="btn btn-primary btn-lg w-full" disabled={!canConfirm} onClick={() => onConfirm(paymentLines.map(line => ({ method: line.method, amount: Number(line.amount || 0) })).filter(line => line.amount > 0), cashPaid || null,Object.fromEntries(Object.entries(proofs).filter(([,value])=>value).map(([method,value])=>[method,value.id])))}>
+        {isProcessing ? 'Processing...' : sendFood?'Complete payment & send food':'Complete Payment'}
       </button>
     }>
       <div className="payment-methods">
         {methods.map(m => (
-          <div key={m.id} className={`payment-method ${isSelected(m.id) ? 'selected' : ''}`} onClick={() => toggleMethod(m.id)}>
+          <button type="button" aria-pressed={isSelected(m.id)} disabled={isProcessing} key={m.id} className={`payment-method ${isSelected(m.id) ? 'selected' : ''}`} onClick={() => toggleMethod(m.id)}>
             <m.icon size={24} />
             <span>{m.label}</span>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -104,6 +112,7 @@ export default function PaymentModal({ total, onConfirm, onClose, isProcessing =
         ))}
       </div>
 
+      {secureBackend&&required.map(line=><PaymentProofCapture key={`${line.method}:${line.amount}`} method={line.method} amountCents={Math.round(Number(line.amount)*100)} checkoutKey={checkoutKey} proof={proofs[line.method]} onProof={proof=>setProofs(current=>({...current,[line.method]:proof}))} disabled={isProcessing}/>)}
       {hasCash && (
         <>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>

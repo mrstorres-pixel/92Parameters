@@ -1,6 +1,8 @@
 import { LayoutDashboard, ShoppingCart, Package, Warehouse, Leaf, Clock, DollarSign, BarChart3, Receipt, Ban, History, Users, ShieldCheck, CreditCard } from 'lucide-react';
+import {secureBackend} from '../utils/secureApi';
 
 export const navItems = [
+  ...(secureBackend?[{to:'/kitchen',icon:ShoppingCart,label:'Kitchen tickets',roles:['kitchen','cashier','manager','owner']}]:[]),
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['cashier', 'manager', 'owner'] },
   { to: '/pos', icon: ShoppingCart, label: 'Point of Sale', roles: ['cashier', 'manager', 'owner'] },
   { to: '/transactions', icon: Receipt, label: 'Transaction', roles: ['cashier', 'manager', 'owner'] },

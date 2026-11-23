@@ -20,6 +20,7 @@ import CustomerMembership from './pages/CustomerMembership';
 import MemberPortal from './pages/MemberPortal';
 import AuditLog from './pages/AuditLog';
 import Maintenance from './pages/Maintenance';
+import Kitchen from './pages/Kitchen';
 
 export default function App() {
   const currentStaff = useAuthStore(s => s.currentStaff);
@@ -56,6 +57,7 @@ export default function App() {
       <HashRouter>
         <Routes>
           <Route element={<MainLayout />}>
+            <Route path="/kitchen" element={<Kitchen />} />
             <Route path="/" element={<Dashboard />} />
             <Route path="/pos" element={<PointOfSale />} />
             <Route path="/products" element={<ProductManagement />} />

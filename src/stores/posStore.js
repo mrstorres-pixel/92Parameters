@@ -4,6 +4,8 @@ import { reportProductSnapshot } from '../utils/reportProductSnapshot';
 export const usePosStore = create((set, get) => ({
   cart: [],
   orderType: 'Dine In',
+  kitchenOrder:null,
+  setKitchenOrder:(kitchenOrder)=>set({kitchenOrder}),
   orderDiscount: 0,
   orderMarkup: 0,
   orderDiscountAmount: 0,
@@ -15,7 +17,7 @@ export const usePosStore = create((set, get) => ({
   setOrderDiscountAmount: (amount) => set({ orderDiscountAmount: Number(amount || 0) }),
   setOrderMarkupAmount: (amount) => set({ orderMarkupAmount: Number(amount || 0) }),
 
-  setCart: (cart, orderType = 'Dine In', orderDiscount = 0, orderMarkup = 0, orderDiscountAmount = 0, orderMarkupAmount = 0) => set({ cart, orderType, orderDiscount, orderMarkup, orderDiscountAmount, orderMarkupAmount }),
+  setCart: (cart, orderType = 'Dine In', orderDiscount = 0, orderMarkup = 0, orderDiscountAmount = 0, orderMarkupAmount = 0) => set({ cart:cart.map(item=>({...item,lineId:item.lineId || crypto.randomUUID()})), orderType, orderDiscount, orderMarkup, orderDiscountAmount, orderMarkupAmount }),
 
   addItem: (product) => {
     const cart = get().cart;
@@ -23,7 +25,7 @@ export const usePosStore = create((set, get) => ({
     if (existing) {
       set({ cart: cart.map(i => i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i) });
     } else {
-      set({ cart: [...cart, { productId: product.id, name: product.name, category: product.category, subCategory: product.subCategory, price: product.price, cost: product.cost || 0, ...reportProductSnapshot(product), quantity: 1, discount: 0, markup: 0, customPrice: 0, note: '' }] });
+      set({ cart: [...cart, { lineId:crypto.randomUUID(),prepStation:product.prepStation ?? (product.category==='Food'?'kitchen':'none'),productId: product.id, name: product.name, category: product.category, subCategory: product.subCategory, price: product.price, cost: product.cost || 0, ...reportProductSnapshot(product), quantity: 1, discount: 0, markup: 0, customPrice: 0, note: '' }] });
     }
   },
 
@@ -50,5 +52,5 @@ export const usePosStore = create((set, get) => ({
     set({ cart: get().cart.map(i => i.productId === productId ? { ...i, note } : i) });
   },
 
-  clearCart: () => set({ cart: [], orderType: 'Dine In', orderDiscount: 0, orderMarkup: 0, orderDiscountAmount: 0, orderMarkupAmount: 0 }),
+  clearCart: () => set({ cart: [], kitchenOrder:null,orderType: 'Dine In', orderDiscount: 0, orderMarkup: 0, orderDiscountAmount: 0, orderMarkupAmount: 0 }),
 }));

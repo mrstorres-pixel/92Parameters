@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useAuthStore } from '../../stores/authStore';
@@ -12,6 +12,7 @@ export default function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const role = currentStaff?.role || 'cashier';
+  const allowed=navItems.find(item=>item.to===location.pathname);
 
   useEffect(() => {
     // Close mobile menu on route change
@@ -22,10 +23,12 @@ export default function MainLayout() {
     
     // If the item exists and the user's role is not allowed, redirect to Dashboard
     if (currentNavItem && !currentNavItem.roles.includes(role)) {
-      navigate('/');
+      navigate(role==='kitchen'?'/kitchen':'/');
     }
   }, [location.pathname, role, navigate]);
 
+  if(role==='kitchen'&&location.pathname!=='/kitchen')return <Navigate to="/kitchen" replace/>;
+  if(allowed&&!allowed.roles.includes(role))return <Navigate to={role==='kitchen'?'/kitchen':'/'} replace/>;
   return (
     <div className="app-layout">
       <div className={`sidebar-overlay ${mobileMenuOpen ? 'active' : ''}`} onClick={closeMobileMenu} />

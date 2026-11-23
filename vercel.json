@@ -1,5 +1,7 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
-  ]
+    { "source": "/api/:path*", "destination": "/api/entry?path=:path*" },
+    { "source": "/((?!api/).*)", "destination": "/" }
+  ],
+  "crons": [{ "path": "/api/jobs/proof-retention", "schedule": "0 18 * * *" }]
 }

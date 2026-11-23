@@ -3,4 +3,6 @@ supabase/.temp/
 .tmp/
 dist/
 .env
+.env.*
+.vercel/
 .DS_Store
