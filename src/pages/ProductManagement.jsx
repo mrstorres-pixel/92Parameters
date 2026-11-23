@@ -6,6 +6,7 @@ import RecipeModal from '../components/products/RecipeModal';
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
 import { formatCurrency } from '../utils/formatters';
+import {secureBackend} from '../utils/secureApi';
 import { CATEGORIES } from '../config/categories';
 import ProductReportingModal from '../components/reports/ProductReportingModal';
 
@@ -181,6 +182,7 @@ export default function ProductManagement() {
             <div className="form-group"><label className="form-label">Cost (₱)</label><input className="form-input" type="number" value={form.cost} onChange={e => setForm({...form, cost: e.target.value})} /></div>
           </div>
           <div className="form-group">
+            {secureBackend&&<label className="form-label">Preparation routing<select className="form-select" value={form.prepStation || ''} onChange={e=>setForm({...form,prepStation:e.target.value || null})}><option value="">Automatic (Food → kitchen)</option><option value="kitchen">Kitchen</option><option value="none">No kitchen ticket</option></select></label>}
             <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={form.isAvailable} onChange={e => setForm({...form, isAvailable: e.target.checked})} /> Available for sale
             </label>

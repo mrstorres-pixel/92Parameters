@@ -17,6 +17,7 @@ import CartPanel from '../components/pos/CartPanel';
 import PaymentModal from '../components/pos/PaymentModal';
 import ReceiptModal from '../components/pos/ReceiptModal';
 import { CATEGORIES } from '../config/categories';
+import {api,secureBackend} from '../utils/secureApi';
 
 export default function PointOfSale() {
   const [products, setProducts] = useState([]);
@@ -36,7 +37,12 @@ export default function PointOfSale() {
   const [qrScanError, setQrScanError] = useState('');
   const [runningBills, setRunningBills] = useState([]);
   const [activeBill, setActiveBill] = useState(null);
-  const { cart, orderType, orderDiscount, orderDiscountAmount, addItem, clearCart, setCart } = usePosStore();
+  const { cart, orderType, orderDiscount, orderDiscountAmount, addItem, clearCart, setCart,kitchenOrder,setKitchenOrder } = usePosStore();
+  const [openOrders,setOpenOrders]=useState([]),[sendingKitchen,setSendingKitchen]=useState(false),[loadingOrder,setLoadingOrder]=useState(false);
+  const dispatchRef=useRef(null);
+  const billLockRef=useRef(false);
+  const [savingBill,setSavingBill]=useState(false);
+  const hasFood=cart.some(item=>item.prepStation==='kitchen'&&item.reportingType!=='waste'&&item.reportingType!=='packaging');
   const currentStaff = useAuthStore(s => s.currentStaff);
   const paymentLockRef = useRef(false);
   const videoRef = useRef(null);
@@ -58,7 +64,33 @@ export default function PointOfSale() {
   }, []);
 
   async function refreshBills() {
-    setRunningBills(await loadOpenBills());
+    try{setRunningBills(await loadOpenBills());if(secureBackend)setOpenOrders(await api('orders'));}catch(e){toast(e.message,'error');}
+  }
+  function ensureOrder(){
+    if(kitchenOrder)return kitchenOrder;
+    const id=crypto.randomUUID();const label=activeBill?.tableName || (hasFood&&orderType==='Dine In'?window.prompt('Table name / number?'):`Order ${id.slice(0,6).toUpperCase()}`);
+    if(!label?.trim())return null;
+    const order={id,label:label.trim(),revision:0};setKitchenOrder(order);return order;
+  }
+  async function sendKitchen(){
+    if(sendingKitchen||paymentLockRef.current)return;
+    const order=ensureOrder();if(!order)return;setSendingKitchen(true);
+    try{const payload={label:order.label,orderType,items:cart,billId:activeBill?.id || null,orderDiscount,orderDiscountAmount};const fingerprint=JSON.stringify({orderId:order.id,order:payload});if(dispatchRef.current?.fingerprint!==fingerprint)dispatchRef.current={fingerprint,key:crypto.randomUUID()};
+      const saved=await api('orders/dispatch',{method:'POST',body:{orderId:order.id,revision:order.revision,order:payload,dispatchKey:dispatchRef.current.key}});setKitchenOrder(saved);
+      if(activeBill)setActiveBill(await db.runningBills.get(activeBill.id));
+      await refreshBills();toast('Kitchen received the order.','success');
+    }catch(e){toast(e.message,'error');}finally{setSendingKitchen(false);}
+  }
+  async function loadKitchenOrder(order){
+    if(cart.length&&!window.confirm('Replace the current cart with this saved order?'))return;
+    setLoadingOrder(true);try{setCart(order.items,order.order_type,Number(order.order_discount || 0),0,Number(order.order_discount_amount || 0),0);setKitchenOrder(order);setActiveBill(order.running_bill_id?await db.runningBills.get(order.running_bill_id):null);}catch(error){toast(error.message,'error');}finally{setLoadingOrder(false);}
+  }
+  async function cancelKitchenOrder(){
+    if(!kitchenOrder || sendingKitchen)return;
+    const reason=window.prompt('Cancellation reason? The kitchen must acknowledge sent items.');if(!reason)return;
+    setSendingKitchen(true);
+    try{await api('orders/cancel',{method:'POST',body:{orderId:kitchenOrder.id,reason}});clearCart();await refreshBills();toast('Cancellation sent to the kitchen.','info');}
+    catch(error){toast(error.message,'error');}finally{setSendingKitchen(false);}
   }
 
   async function getCustomerFromScan(value) {
@@ -191,9 +223,10 @@ export default function PointOfSale() {
   }, [showQrScanner]);
 
   async function saveBill() {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || billLockRef.current) return;
     const tableName = activeBill?.tableName || window.prompt('Table name / number?');
     if (!tableName) return;
+    billLockRef.current=true;setSavingBill(true);
     const items = cart.map(i => ({ ...i, note: (i.note || '').trim() }));
     try {
       const id = await saveRunningBill({
@@ -209,6 +242,7 @@ export default function PointOfSale() {
         staff: currentStaff,
         expectedUpdatedAt: activeBill?.updatedAt,
       });
+      if(secureBackend){setActiveBill(await db.runningBills.get(id));if(kitchenOrder&&!kitchenOrder.running_bill_id)await api('orders/link-bill',{method:'POST',body:{orderId:kitchenOrder.id,billId:id,revision:kitchenOrder.revision}});}
       setActiveBill({ ...(activeBill || {}), id, tableName, items, orderType, orderDiscount, orderMarkup: 0, orderDiscountAmount, orderMarkupAmount: 0, total: calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0), staffName: currentStaff?.name, updatedAt: Date.now() });
       await refreshBills();
       toast(activeBill ? 'Running bill updated' : 'Running bill saved', 'success');
@@ -217,22 +251,27 @@ export default function PointOfSale() {
     } catch (error) {
       await refreshBills();
       toast(error.message || 'Running bill changed on another device. Reload it and try again.', 'error');
-    }
+    } finally {billLockRef.current=false;setSavingBill(false);}
   }
 
-  function loadBill(bill) {
+  async function loadBill(bill) {
+    setKitchenOrder(null);
     setActiveBill(bill);
     setCart(bill.items || [], bill.orderType || 'Dine In', bill.orderDiscount || 0, 0, bill.orderDiscountAmount || 0, 0);
+    if(secureBackend){setLoadingOrder(true);try{const [order]=await api(`orders?billId=${bill.id}`);setKitchenOrder(order || null);}catch(e){toast(e.message,'error');}finally{setLoadingOrder(false);}}
   }
 
   async function closeBill() {
     if (!activeBill) return;
     if (!window.confirm(`Close running bill for ${activeBill.tableName}? This will discard the open tab without charging.`)) return;
+    try {
+    if(secureBackend&&kitchenOrder){const reason=window.prompt('Cancellation reason? The kitchen must acknowledge sent items.');if(!reason)return;await api('orders/cancel',{method:'POST',body:{orderId:kitchenOrder.id,reason}});}
     await deleteRunningBill(activeBill.id);
     clearCart();
     setActiveBill(null);
     await refreshBills();
     toast('Running bill closed', 'info');
+    } catch(error) {toast(error.message || 'Could not close this tab. Refresh and retry.','error');}
   }
 
   function createCheckoutKey() {
@@ -241,17 +280,18 @@ export default function PointOfSale() {
   }
 
   function openPayment() {
-    if (cart.length === 0 || showPayment || isProcessingPayment) return;
+    if (cart.length === 0 || showPayment || isProcessingPayment || loadingOrder || sendingKitchen) return;
+    if(secureBackend&&!ensureOrder())return;
     setCheckoutKey(createCheckoutKey());
     setShowPayment(true);
   }
 
-  async function handlePayment(paymentLines, cashReceived) {
+  async function handlePayment(paymentLines, cashReceived,proofs={}) {
     if (paymentLockRef.current) return;
     paymentLockRef.current = true;
     setIsProcessingPayment(true);
     try {
-      const orderTotal = calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0);
+      const orderTotal = Math.round(calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0)*100)/100;
       const maxLoyaltyDiscount = selectedCustomer ? getRedeemableAmount(selectedCustomer, orderTotal) : 0;
       const loyaltyDiscount = Math.min(maxLoyaltyDiscount, Math.max(0, Number(loyaltyRedeemAmount || 0)));
       const loyaltyRedeemed = calculateRedeemPoints(loyaltyDiscount);
@@ -259,8 +299,8 @@ export default function PointOfSale() {
       const loyaltyEarned = selectedCustomer ? calculateEarnedPoints(total) : 0;
       const birthdayStatus = selectedCustomer ? getBirthdayRewardStatus(selectedCustomer) : { eligible: false };
       const birthdayRewardRedeemed = Boolean(selectedCustomer && birthdayReward && birthdayStatus.eligible);
-      const cleanPaymentLines = paymentLines.map(line => ({ method: line.method, amount: Number(line.amount || 0) })).filter(line => line.amount > 0);
-      const paidTotal = cleanPaymentLines.reduce((sum, line) => sum + line.amount, 0);
+      const cleanPaymentLines = paymentLines.map(line => ({ method: line.method, amount: Math.round(Number(line.amount || 0)*100)/100 })).filter(line => line.amount > 0);
+      const paidTotal = Math.round(cleanPaymentLines.reduce((sum, line) => sum + line.amount, 0)*100)/100;
       if (paidTotal < total) throw new Error('Payment is not complete yet.');
       if (paidTotal > total && !cleanPaymentLines.some(line => line.method === 'Cash')) throw new Error('Only cash payments can be above the amount due.');
       const changeDue = Math.max(0, paidTotal - total);
@@ -281,6 +321,11 @@ export default function PointOfSale() {
         total, cashReceived,
         staffId: currentStaff?.id, staffName: currentStaff?.name, status: 'completed',
       };
+      if(secureBackend){
+        const order=ensureOrder();if(!order)throw new Error('Order label required.');
+        const saved=await api('checkout',{method:'POST',body:{...txn,paymentLines:cleanPaymentLines,proofs,orderId:order.id,orderLabel:order.label,orderRevision:order.revision,dispatchKey:currentCheckoutKey,billId:activeBill?.id || null,expectedBillUpdatedAt:activeBill?.updatedAt || null}});
+        setReceipt(saved);setShowPayment(false);setCheckoutKey(null);clearCart();setActiveBill(null);clearCustomer();refreshBills();toast('Payment completed. Food was sent to the kitchen.','success');return;
+      }
       let transactionId;
       try {
         transactionId = await db.transactions.add(txn);
@@ -419,8 +464,10 @@ export default function PointOfSale() {
 
   return (
     <div className="pos-layout">
-      <div className="pos-menu">
+      <div className="pos-menu" inert={showPayment || isProcessingPayment || sendingKitchen || loadingOrder || savingBill ? '' : undefined}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+          {secureBackend&&openOrders.filter(order=>!order.running_bill_id).length>0&&<div className="running-bills"><strong>Unpaid kitchen orders</strong>{openOrders.filter(order=>!order.running_bill_id).map(order=><button className="btn btn-secondary" key={order.id} onClick={()=>loadKitchenOrder(order)}>{order.label} · load order</button>)}</div>}
+          {kitchenOrder&&<div className="order-kitchen-status"><strong>{kitchenOrder.label}</strong>{kitchenOrder.sent_items?'Saved in kitchen · additions send separately':'Not sent yet'} · <a href="#/kitchen">View kitchen tickets</a></div>}
           {runningBills.length > 0 && (
             <div className="running-bills">
               <div className="text-sm text-muted" style={{ fontWeight: 700, textTransform: 'uppercase' }}>Running Bills</div>
@@ -519,7 +566,7 @@ export default function PointOfSale() {
         </div>
         <ProductGrid products={products} category={category} subCategory={subCategory} searchQuery={search} onAdd={addItem} />
       </div>
-      <CartPanel onCharge={openPayment} activeBill={activeBill} onSaveBill={saveBill} onCloseBill={closeBill} checkoutDisabled={showPayment || isProcessingPayment} loyaltyCustomer={selectedCustomer} loyaltyDiscount={Math.min(selectedCustomer ? getRedeemableAmount(selectedCustomer, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0)) : 0, Math.max(0, Number(loyaltyRedeemAmount || 0)))} />
+      <CartPanel onSendKitchen={secureBackend&&(hasFood||kitchenOrder?.sent_items?.length)?sendKitchen:null} onCancelKitchen={secureBackend&&kitchenOrder?.revision>0&&!activeBill?cancelKitchenOrder:null} kitchenOrder={kitchenOrder} sendingKitchen={sendingKitchen} onCharge={openPayment} activeBill={activeBill} onSaveBill={saveBill} onCloseBill={closeBill} checkoutDisabled={showPayment || isProcessingPayment || loadingOrder || sendingKitchen || savingBill} loyaltyCustomer={selectedCustomer} loyaltyDiscount={Math.min(selectedCustomer ? getRedeemableAmount(selectedCustomer, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0)) : 0, Math.max(0, Number(loyaltyRedeemAmount || 0)))} />
       {showQrScanner && (
         <Modal title="Scan Membership QR" onClose={() => setShowQrScanner(false)} footer={
           <>
@@ -534,7 +581,7 @@ export default function PointOfSale() {
           {qrScanError && <div className="alert-banner alert-warning" style={{ marginTop: 12 }}><span>{qrScanError}</span></div>}
         </Modal>
       )}
-      {showPayment && <PaymentModal total={Math.max(0, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0) - Math.min(selectedCustomer ? getRedeemableAmount(selectedCustomer, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0)) : 0, Math.max(0, Number(loyaltyRedeemAmount || 0))))} onConfirm={handlePayment} onClose={() => { if (!isProcessingPayment) setShowPayment(false); }} isProcessing={isProcessingPayment} />}
+      {showPayment && <PaymentModal checkoutKey={checkoutKey} sendFood={secureBackend&&hasFood} total={Math.max(0, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0) - Math.min(selectedCustomer ? getRedeemableAmount(selectedCustomer, calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0)) : 0, Math.max(0, Number(loyaltyRedeemAmount || 0))))} onConfirm={handlePayment} onClose={() => { if (!isProcessingPayment) setShowPayment(false); }} isProcessing={isProcessingPayment} />}
       {receipt && <ReceiptModal transaction={receipt} onClose={() => setReceipt(null)} />}
     </div>
   );

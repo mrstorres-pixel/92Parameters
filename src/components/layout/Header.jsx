@@ -9,6 +9,7 @@ const pageTitles = {
   '/inventory': 'Inventory', '/ingredients': 'Ingredients', '/time-tracking': 'Time Tracking',
   '/cash': 'Cash Drawer', '/reports': 'Business Report', '/transactions': 'Transaction Report',
   '/voids': 'Void Log', '/maintenance': 'Maintenance',
+  '/kitchen':'Kitchen tickets',
 };
 
 export default function Header() {
@@ -42,7 +43,7 @@ export default function Header() {
             <span className="role-badge">{currentStaff.role}</span>
           </div>
         )}
-        <button className="btn btn-ghost btn-icon" onClick={logout} title="Logout">
+        <button className="btn btn-ghost btn-icon" onClick={()=>logout().catch(()=>window.alert('Could not sign out. Check the connection and try again.'))} title="Logout">
           <LogOut size={18} />
         </button>
       </div>

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import db from '../db/database';
+import {api,secureBackend} from '../utils/secureApi';
 
 export default function LoginScreen() {
   const [pin, setPin] = useState('');
@@ -9,11 +10,13 @@ export default function LoginScreen() {
 
   const submitPin = useCallback(async (value) => {
     if (value.length !== 4) return;
-    const staff = await db.staff.where('pin').equals(value).first();
+    let staff;
+    try{staff=secureBackend?await api('session',{method:'POST',body:{pin:value}}):await db.staff.where('pin').equals(value).first();}
+    catch(e){setError(e.message);setPin('');return;}
     if (staff?.role === 'staff') {
       setError('This profile is for time tracking only');
       setTimeout(() => { setPin(''); setError(''); }, 1200);
-    } else if (staff) { login(staff); }
+    } else if (staff) { if(staff.role==='kitchen')window.location.hash='/kitchen';login(staff); }
     else { setError('Invalid PIN'); setTimeout(() => { setPin(''); setError(''); }, 1000); }
   }, [login]);
 
@@ -26,12 +29,7 @@ export default function LoginScreen() {
     const newPin = pin + key;
     setPin(newPin);
     if (newPin.length === 4) {
-      const staff = await db.staff.where('pin').equals(newPin).first();
-      if (staff?.role === 'staff') {
-        setError('This profile is for time tracking only');
-        setTimeout(() => { setPin(''); setError(''); }, 1200);
-      } else if (staff) { login(staff); }
-      else { setError('Invalid PIN'); setTimeout(() => { setPin(''); setError(''); }, 1000); }
+      await submitPin(newPin);
     }
   }, [login, pin, submitPin]);
 

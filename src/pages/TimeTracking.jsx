@@ -5,6 +5,7 @@ import Modal from '../components/common/Modal';
 import { useToast } from '../components/common/Toast';
 import { useAuthStore } from '../stores/authStore';
 import { formatTime, formatCurrency } from '../utils/formatters';
+import {api,secureBackend} from '../utils/secureApi';
 
 function getLocalDateValue(date = new Date()) {
   const year = date.getFullYear();
@@ -117,11 +118,13 @@ export default function TimeTracking() {
   async function confirmPin() {
     if (!pinPrompt) return;
     const selected = staff.find(s => s.id === pinPrompt.staffId);
-    if (!selected?.pin) {
+    if (!selected?.pin && !selected?.hasPin) {
       setPinError('This profile needs a PIN before time tracking.');
       return;
     }
-    if (pinValue !== selected.pin) {
+    let correct=pinValue===selected.pin;
+    if(secureBackend){try{await api('verify-pin',{method:'POST',body:{pin:pinValue,staffId:selected.id}});correct=true;}catch{correct=false;}}
+    if (!correct) {
       setPinError('Invalid PIN');
       setPinValue('');
       return;

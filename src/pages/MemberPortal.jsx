@@ -4,6 +4,7 @@ import { CreditCard, Gift, ShieldCheck } from 'lucide-react';
 import db from '../db/database';
 import { extractMemberCode, getBirthdayRewardStatus, getMembershipExpiry, isMembershipExpired, PESOS_PER_POINT_EARNED, POINTS_PER_PESO_REDEEMED } from '../utils/loyalty';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
+import {api,secureBackend} from '../utils/secureApi';
 
 export default function MemberPortal() {
   const { code } = useParams();
@@ -17,6 +18,7 @@ export default function MemberPortal() {
   async function load() {
     setLoading(true);
     const cardCode = extractMemberCode(decodeURIComponent(code || ''));
+    if(secureBackend){try{const result=await api(`member?code=${encodeURIComponent(cardCode)}`);setCard(result.card);setCustomer(result.customer);setHistory(result.history);}finally{setLoading(false);}return;}
     const foundCard = await db.membershipCards.where('cardCode').equals(cardCode).first();
     setCard(foundCard);
     if (foundCard?.customerId) {
@@ -39,7 +41,7 @@ export default function MemberPortal() {
   const points = Number(customer?.pointsBalance || 0);
   const pesoValue = Math.floor(points / POINTS_PER_PESO_REDEEMED);
   const expired = customer ? isMembershipExpired(customer) : false;
-  const birthdayStatus = customer ? getBirthdayRewardStatus(customer) : null;
+  const birthdayStatus = customer ? customer.birthdayStatus || getBirthdayRewardStatus(customer) : null;
   const expiresAt = customer?.expiresAt || card?.expiresAt || getMembershipExpiry(customer?.activatedAt || card?.activatedAt);
 
   return (

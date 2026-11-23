@@ -1,4 +1,5 @@
 import db from '../db/database';
+import {api,secureBackend} from './secureApi';
 
 const STORAGE_KEY = 'runningBillsFallback';
 
@@ -11,6 +12,7 @@ function writeLocalBills(bills) {
 }
 
 export async function loadOpenBills() {
+  if(secureBackend)return db.runningBills.query({filters:[{field:'status',op:'eq',value:'open'}],orderBy:'updatedAt',ascending:false,limit:100,throwOnError:true});
   try {
     return await db.runningBills.query({
       filters: [{ field: 'status', op: 'eq', value: 'open' }],
@@ -24,6 +26,7 @@ export async function loadOpenBills() {
 }
 
 export async function saveRunningBill({ billId, tableName, items, orderType, orderDiscount, orderMarkup, orderDiscountAmount, orderMarkupAmount, total, staff, expectedUpdatedAt }) {
+  if(secureBackend){const bill=await api('bills/save',{method:'POST',body:{billId,tableName,items,orderType,orderDiscount,orderDiscountAmount,total,expectedUpdatedAt}});return bill.id;}
   const now = Date.now();
   const data = {
     tableName,
@@ -77,6 +80,7 @@ export async function closeRunningBill(billId, transactionId) {
 
 export async function deleteRunningBill(billId) {
   if (!billId) return;
+  if(secureBackend){await db.runningBills.delete(billId);return;}
   try {
     await db.runningBills.delete(billId);
   } catch {

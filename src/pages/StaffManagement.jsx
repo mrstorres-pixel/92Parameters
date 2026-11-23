@@ -5,6 +5,7 @@ import Modal from '../components/common/Modal';
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
 import { formatCurrency } from '../utils/formatters';
+import {secureBackend} from '../utils/secureApi';
 
 const emptyForm = { name: '', pin: '', role: 'cashier', hourlyRate: 0, profileImage: '' };
 
@@ -44,17 +45,17 @@ export default function StaffManagement() {
   }
 
   async function save() {
-    if (!form.name || !form.role || !form.pin) {
+    if (!form.name || !form.role || (!form.pin && (editing==='new' || !secureBackend))) {
       toast('Please fill all required fields', 'error');
       return;
     }
     
-    if (!/^\d{4}$/.test(form.pin)) {
+    if (form.pin && !/^\d{4}$/.test(form.pin)) {
       toast('PIN must be exactly 4 digits', 'error');
       return;
     }
 
-    const existing = await db.staff.where('pin').equals(form.pin).first();
+    const existing = form.pin?await db.staff.where('pin').equals(form.pin).first():null;
     if (existing && existing.id !== editing) {
       toast('This PIN is already in use by another staff member', 'error');
       return;
@@ -178,7 +179,7 @@ export default function StaffManagement() {
                   </span>
                 </td>
                 <td style={{ fontWeight: 500 }}>{formatCurrency(s.hourlyRate || 0)}/hr</td>
-                <td style={{ fontFamily: 'monospace', letterSpacing: s.pin ? 2 : 0 }}>{s.pin ? '****' : 'No PIN'}</td>
+                <td style={{ fontFamily: 'monospace', letterSpacing: s.pin||s.hasPin ? 2 : 0 }}>{s.pin||s.hasPin ? '****' : 'No PIN'}</td>
                 <td>
                   <div className="flex gap-8">
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openEdit(s)} title="Edit">
@@ -238,6 +239,7 @@ export default function StaffManagement() {
                 <option value="manager">Manager</option>
                 <option value="owner">Owner</option>
                 <option value="staff">Staff (Time Tracking Only)</option>
+                {secureBackend&&<option value="kitchen">Kitchen (Tickets Only)</option>}
               </select>
             </div>
 

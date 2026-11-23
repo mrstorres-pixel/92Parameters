@@ -1,8 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
+import {secureBackend,getStaffApproval} from '../utils/secureApi';
+import {useAuthStore} from '../stores/authStore';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(supabaseUrl, supabaseKey, secureBackend ? {global:{fetch:(input,options={})=>{
+  const original=new URL(typeof input==='string'?input:input.url);
+  if(!original.pathname.startsWith('/rest/v1/'))throw new Error('Use the secure API for this operation.');
+    const headers=new Headers(options.headers);if(getStaffApproval())headers.set('x-staff-approval',getStaffApproval());
+    return fetch(`/api/data/${original.pathname.slice('/rest/v1/'.length)}${original.search}`,{...options,headers,credentials:'same-origin'}).then(response=>{if(response.status===401)window.dispatchEvent(new Event('cafe-session-expired'));return response;});
+}}} : {});
 
 function applyFilters(query, filters = []) {
   return filters.reduce((q, filter) => {
@@ -66,6 +73,7 @@ function buildTable(tableName) {
       return data;
     },
     async count() {
+      if(secureBackend && tableName==='staff' && !useAuthStore.getState().currentStaff)return 1; // Server health gate replaces client-side owner seeding.
       const { count, error } = await supabase.from(tableName).select('*', { count: 'exact', head: true });
       if (error) console.error(`Error counting ${tableName}:`, error);
       return count || 0;

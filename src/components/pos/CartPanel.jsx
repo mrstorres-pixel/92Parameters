@@ -4,7 +4,7 @@ import { usePosStore } from '../../stores/posStore';
 import { formatCurrency } from '../../utils/formatters';
 import { calcItemTotal, calcCartTotal, calcCartSubtotal, calcItemAdjustedPrice } from '../../utils/calculations';
 
-export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBill, checkoutDisabled = false, loyaltyDiscount = 0, loyaltyCustomer = null }) {
+export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBill, checkoutDisabled = false, loyaltyDiscount = 0, loyaltyCustomer = null,onSendKitchen,onCancelKitchen,kitchenOrder,sendingKitchen=false }) {
   const { cart, orderType, orderDiscount, orderDiscountAmount, setOrderType, setOrderDiscount, setOrderDiscountAmount, updateQuantity, removeItem, setDiscount, setMarkup, setCustomPrice, setItemNote, clearCart } = usePosStore();
   const subtotal = calcCartSubtotal(cart);
   const orderTotal = calcCartTotal(cart, orderDiscount, 0, orderDiscountAmount, 0);
@@ -42,7 +42,7 @@ export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBil
   }
 
   return (
-    <div className="pos-cart-panel">
+    <div className="pos-cart-panel" inert={checkoutDisabled ? '' : undefined}>
       <div className="cart-header">
         <div className="flex-between">
           <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>{activeBill ? `Table ${activeBill.tableName}` : 'Current Order'}</h3>
@@ -162,11 +162,13 @@ export default function CartPanel({ onCharge, activeBill, onSaveBill, onCloseBil
             <strong>-{formatCurrency(loyaltyDiscount)}</strong>
           </div>
         )}
-        <div className="flex gap-8 mb-16">
+        <div className="cart-order-actions mb-16">
+          {onSendKitchen&&<button className="btn btn-secondary w-full" disabled={cart.length===0||checkoutDisabled||sendingKitchen} onClick={onSendKitchen}>{sendingKitchen?'Sending…':kitchenOrder?'Send kitchen updates':'Send to Kitchen'}</button>}
           <button className="btn btn-secondary w-full" disabled={cart.length === 0} onClick={onSaveBill}>
             {activeBill ? 'Update Tab' : 'Save Tab'}
           </button>
           {activeBill && <button className="btn btn-danger" onClick={onCloseBill}>Close</button>}
+          {onCancelKitchen && <button className="btn btn-danger" onClick={onCancelKitchen}>Cancel order</button>}
         </div>
         <button className="btn btn-primary charge-btn" disabled={cart.length === 0 || checkoutDisabled} onClick={() => onCharge(total)}>
           {activeBill ? 'Bill Out' : 'Charge'} {formatCurrency(total)}

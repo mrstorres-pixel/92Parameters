@@ -3,6 +3,8 @@ import { Search, Ban, Trash2, Eye, Receipt, Download } from "lucide-react";
 import db from "../db/database";
 import Modal from "../components/common/Modal";
 import ReceiptModal from "../components/pos/ReceiptModal";
+import PaymentProofViewer from "../components/pos/PaymentProofViewer";
+import {api,secureBackend} from '../utils/secureApi';
 import { useToast } from "../components/common/Toast";
 import { useAuthStore } from "../stores/authStore";
 import { formatCurrency } from "../utils/formatters";
@@ -172,6 +174,7 @@ export default function TransactionReport() {
 
   async function handleVoid() {
     try {
+      if(secureBackend){await api('transactions/reverse',{method:'POST',body:{id:showVoid.id,pin:managerPin,reason:voidReason,delete:false}});toast('Transaction voided');setShowVoid(null);setSelected(null);setVoidReason('');setManagerPin('');load();return;}
       const manager = await db.staff.where("pin").equals(managerPin).first();
       if (
         !manager ||
@@ -219,6 +222,7 @@ export default function TransactionReport() {
     )
       return;
     try {
+      if(secureBackend){await api('transactions/reverse',{method:'POST',body:{id:txn.id,reason:'Owner deleted transaction',delete:true}});toast('Transaction deleted','info');setSelected(null);load();return;}
       if (txn.status !== "void") {
         await reverseDailySalesSummary(txn);
         await reverseLoyaltyForTransaction(
@@ -749,6 +753,7 @@ export default function TransactionReport() {
             </div>
           </div>
 
+          {secureBackend&&['owner','manager'].includes(currentStaff?.role)&&<PaymentProofViewer transactionId={selected.id} isOwner={isOwner}/>}
           {selected.customerName && (
             <div className="table-container" style={{ marginBottom: 16 }}>
               <table className="data-table">
