@@ -51,15 +51,16 @@ for (const row of rows) {
 let prepared = 0;
 for (const row of rows) {
   if (row.pin_hash) continue;
-  const { error } = await admin
+  const { data, error } = await admin
     .from("staff")
     .update({
       pin_hash: hashPin(row.pin),
       pin_lookup: pinLookup(row.pin, SESSION_PEPPER),
     })
     .eq("id", row.id)
-    .eq("pin", row.pin);
-  if (error)
+    .eq("pin", row.pin)
+    .select("id");
+  if (error || data?.length !== 1)
     throw new Error(
       `Preparation failed at staff ID ${row.id}; safe to rerun after resolving it.`,
     );

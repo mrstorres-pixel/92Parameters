@@ -164,7 +164,10 @@ export function fixtureAdmin(db) {
       else throw new Error("Unsupported fixture method");
       return reply(rows);
     } catch (e) {
-      return reply({ message: e.message, code: e.code || "FIXTURE" }, 400);
+      return reply(
+        { message: e.message, code: e.code || "FIXTURE" },
+        e.code === "42P01" ? 404 : 400,
+      );
     }
   };
   const admin = createClient(

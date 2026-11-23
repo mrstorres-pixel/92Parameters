@@ -1,5 +1,7 @@
 .tmp/
 tests/
-scripts/
+scripts/*
+!scripts/prepareStaffPins.mjs
+!scripts/checkSecureSetup.mjs
 docs/
 supabase/

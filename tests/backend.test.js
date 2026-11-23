@@ -59,6 +59,7 @@ test("real API sessions, private photos, expiry, and permissions through isolate
     return response;
   };
   try {
+    assert.equal((await request("health")).status, 200);
     let result = await request("session", {
       method: "POST",
       body: { pin: "2468" },
@@ -213,6 +214,14 @@ test("real API sessions, private photos, expiry, and permissions through isolate
       (await db.query("select pin from staff where id=1")).rows[0].pin,
       null,
     );
+    await db.exec("drop table app_sessions");
+    const unavailable = await request("health");
+    assert.equal(
+      unavailable.status,
+      503,
+      "A missing table must not be reported healthy when HEAD has an empty 404 response.",
+    );
+    assert.match(unavailable.data.message, /preparation is incomplete/);
   } finally {
     await db.close();
   }

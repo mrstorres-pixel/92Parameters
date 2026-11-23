@@ -1,5 +1,9 @@
 # Payment photos, kitchen tablet and report performance
 
+**For the café operator:** run the first two SQL files below in project `glbrfvqdtwvwzxbumeac`, then save its `service_role` key in Vercel as `SUPABASE_SERVICE_ROLE_KEY` for Preview and Production. I can configure the remaining settings and run server-side preparation checks. Wait for a verified preview before the final cutover SQL and production release. The rest of this document is the technical reference for that work.
+
+If a check says the new tables are missing, open the café's SQL Editor using the project ID above, paste the **entire** preparation file and run it. Check for an SQL error instead of assuming that an empty result means every statement ran. The server health check now verifies the table and required columns with GET, avoiding PostgREST's empty-HEAD-404 behavior.
+
 This release is prepared on `pos-proof-kitchen`. It does not activate the new payment or login rules until `VITE_SECURE_BACKEND=true` is built into the frontend. The existing café database is not available through the connected Supabase accounts, so its migrations and live audit must be run in the café's SQL Editor.
 
 ## 1. Fix the 30-day report independently

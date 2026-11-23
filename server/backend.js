@@ -255,11 +255,17 @@ export function createHandler({
         return found;
       };
       if (path === "health") {
-        unwrap(
-          await admin
-            .from("app_sessions")
-            .select("token_hash", { head: true, count: "exact" }),
-        );
+        const probe = await admin
+          .from("app_sessions")
+          .select("token_hash,staff_id,auth_version,expires_at")
+          .limit(0);
+        // PostgREST may return an empty 404 body for HEAD, which the SDK
+        // normalizes to a successful 204. A GET probe must confirm real schema.
+        if (probe.error || probe.status !== 200 || !Array.isArray(probe.data))
+          fail(
+            503,
+            "Database preparation is incomplete or unavailable. Check the café preparation SQL and server settings.",
+          );
         return send(res, 200, { ready: true });
       }
       if (path === "session" && req.method === "POST") {
