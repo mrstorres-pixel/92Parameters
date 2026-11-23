@@ -290,6 +290,24 @@ export default function TransactionReport() {
       title="Transaction Report"
       generatedAt={report?.generatedAt}
       onRefresh={load}
+      period={
+        <ReportPeriod
+          {...{
+            range,
+            customStart,
+            customEnd,
+            lookbackAmount,
+            lookbackUnit,
+            bounds,
+          }}
+          onRange={setRange}
+          onStart={setCustomStart}
+          onEnd={setCustomEnd}
+          onAmount={setLookbackAmount}
+          onUnit={setLookbackUnit}
+          error={rangeError}
+        />
+      }
       actions={
         <button
           className="btn btn-secondary"
@@ -301,75 +319,75 @@ export default function TransactionReport() {
         </button>
       }
     >
-      <ReportPeriod
-        {...{
-          range,
-          customStart,
-          customEnd,
-          lookbackAmount,
-          lookbackUnit,
-          bounds,
-        }}
-        onRange={setRange}
-        onStart={setCustomStart}
-        onEnd={setCustomEnd}
-        onAmount={setLookbackAmount}
-        onUnit={setLookbackUnit}
-        error={rangeError}
-      />
-
-      <div className="toolbar">
-        <div className="search-bar">
-          <Search size={16} />
-          <input
-            aria-label="Search receipts"
-            placeholder="Search receipt #, staff, payment..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <div className="report-filters">
+        <div className="report-filters-primary">
+          <div className="search-bar">
+            <Search size={16} />
+            <input
+              aria-label="Search receipts"
+              placeholder="Search receipt #, staff, payment..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <label className="report-field">
+            Payment method
+            <select
+              aria-label="Payment method"
+              className="form-select"
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value)}
+            >
+              {paymentOptions.map((method) => (
+                <option key={method} value={method}>
+                  {method === "All" ? "All Payments" : method}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-        <select
-          aria-label="Payment method"
-          className="form-select"
-          style={{ width: 160 }}
-          value={paymentFilter}
-          onChange={(e) => setPaymentFilter(e.target.value)}
-        >
-          {paymentOptions.map((method) => (
-            <option key={method} value={method}>
-              {method === "All" ? "All Payments" : method}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Receipt status"
-          className="form-select"
-          style={{ width: 150 }}
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="All">All Statuses</option>
-          <option value="completed">Completed</option>
-          <option value="void">Void</option>
-        </select>
-        <select
-          aria-label="Staff filter"
-          className="form-select"
-          style={{ width: 180 }}
-          value={staffFilter}
-          onChange={(e) => setStaffFilter(e.target.value)}
-        >
-          <option value="All">All Staff</option>
-          {staff.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-        <span className="text-muted text-sm">
+        <details className="report-explanation">
+          <summary>
+            More filters (
+            {Number(statusFilter !== "All") + Number(staffFilter !== "All")}{" "}
+            active)
+          </summary>
+          <div className="report-filter-row">
+            <label className="report-field">
+              Receipt status
+              <select
+                aria-label="Receipt status"
+                className="form-select"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="All">All Statuses</option>
+                <option value="completed">Completed</option>
+                <option value="void">Void</option>
+              </select>
+            </label>
+            <label className="report-field">
+              Staff
+              <select
+                aria-label="Staff filter"
+                className="form-select"
+                value={staffFilter}
+                onChange={(e) => setStaffFilter(e.target.value)}
+              >
+                <option value="All">All Staff</option>
+                {staff.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </details>
+        <p className="report-help report-matching-count">
           Showing {report?.matchingCount || 0} matching record
           {report?.matchingCount !== 1 ? "s" : ""} in the full period
-        </span>
+        </p>
       </div>
 
       {!rangeError && <ReportState state={state} />}
@@ -441,16 +459,16 @@ export default function TransactionReport() {
           </div>
 
           <div className="table-container">
-            <table className="data-table">
+            <table className="data-table report-record-table">
               <thead>
                 <tr>
-                  <th>Date / Time</th>
+                  <th className="report-secondary-column">Date / Time</th>
                   <th>Receipt #</th>
-                  <th>Type</th>
-                  <th>Items</th>
+                  <th className="report-secondary-column">Type</th>
+                  <th className="report-secondary-column">Items</th>
                   <th>Payment</th>
-                  <th>Staff</th>
-                  <th>Receipt total</th>
+                  <th className="report-secondary-column">Staff</th>
+                  <th className="report-money">Receipt total</th>
                   {paymentFilter !== "All" && <th>{paymentFilter} portion</th>}
                   <th>Status</th>
                   <th>Actions</th>
@@ -459,14 +477,26 @@ export default function TransactionReport() {
               <tbody>
                 {filtered.map((t) => (
                   <tr key={t.id}>
-                    <td>{reportDateTime(t.datetime)}</td>
-                    <td style={{ fontWeight: 600, color: "var(--accent)" }}>
-                      {t.receiptNo}
+                    <td className="report-secondary-column">
+                      {reportDateTime(t.datetime)}
                     </td>
-                    <td>
+                    <td
+                      data-label="Receipt"
+                      className="report-record-identity"
+                      style={{ fontWeight: 600, color: "var(--accent)" }}
+                    >
+                      {t.receiptNo}
+                      <span className="report-record-date">
+                        {reportDateTime(t.datetime)}
+                      </span>
+                    </td>
+                    <td className="report-secondary-column">
                       <span className="badge badge-neutral">{t.orderType}</span>
                     </td>
-                    <td className="truncate" style={{ maxWidth: 200 }}>
+                    <td
+                      className="truncate report-secondary-column"
+                      style={{ maxWidth: 200 }}
+                    >
                       {(t.items || [])
                         .map(
                           (i) =>
@@ -474,7 +504,7 @@ export default function TransactionReport() {
                         )
                         .join(", ")}
                     </td>
-                    <td>
+                    <td data-label="Payment">
                       {t.report.payments.map((p) => p.method).join(" + ") ||
                         (t.report.totalCents === 0
                           ? "No payment (free)"
@@ -485,12 +515,21 @@ export default function TransactionReport() {
                         </div>
                       )}
                     </td>
-                    <td>{t.staffName || "—"}</td>
-                    <td style={{ fontWeight: 600 }}>
+                    <td className="report-secondary-column">
+                      {t.staffName || "—"}
+                    </td>
+                    <td
+                      data-label="Receipt total"
+                      className="report-money"
+                      style={{ fontWeight: 600 }}
+                    >
                       {money(t.report.totalCents)}
                     </td>
                     {paymentFilter !== "All" && (
-                      <td>
+                      <td
+                        data-label={`${paymentFilter} portion`}
+                        className="report-money"
+                      >
                         {money(
                           t.report.payments
                             .filter((p) => p.method === paymentFilter)
@@ -498,24 +537,24 @@ export default function TransactionReport() {
                         )}
                       </td>
                     )}
-                    <td>
+                    <td data-label="Status">
                       {t.status === "void" ? (
                         <span className="void-stamp">VOID</span>
                       ) : (
                         <span className="badge badge-success">Completed</span>
                       )}
                     </td>
-                    <td>
+                    <td className="report-record-actions">
                       <div className="flex gap-8">
                         <button
-                          className="btn btn-ghost btn-icon btn-sm"
+                          className="btn btn-secondary btn-sm"
                           onClick={() => setSelected(t)}
-                          title="View"
+                          aria-label={`Details for ${t.receiptNo}`}
                         >
-                          <Eye size={14} />
+                          <Eye size={18} /> Details
                         </button>
                         <button
-                          className="btn btn-ghost btn-icon btn-sm"
+                          className="btn btn-ghost btn-icon btn-sm report-secondary-column"
                           onClick={() => setShowReceipt(t)}
                           title="Receipt"
                         >
@@ -523,7 +562,7 @@ export default function TransactionReport() {
                         </button>
                         {t.status !== "void" && (
                           <button
-                            className="btn btn-ghost btn-icon btn-sm"
+                            className="btn btn-ghost btn-icon btn-sm report-secondary-column"
                             onClick={() => setShowVoid(t)}
                             title="Void"
                           >
@@ -532,7 +571,7 @@ export default function TransactionReport() {
                         )}
                         {isOwner && (
                           <button
-                            className="btn btn-ghost btn-icon btn-sm"
+                            className="btn btn-ghost btn-icon btn-sm report-secondary-column"
                             onClick={() => deleteTransaction(t)}
                             title="Delete"
                           >

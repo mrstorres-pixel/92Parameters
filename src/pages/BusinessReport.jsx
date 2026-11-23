@@ -19,6 +19,7 @@ import {
   Metric,
   MoneyTable,
   BarPanel,
+  ReportExplanation,
 } from "../components/reports/ReportUI";
 import ReviewReportItem from "../components/reports/ReviewReportItem";
 
@@ -32,6 +33,7 @@ export default function BusinessReport() {
     [payment, setPayment] = useState("All"),
     [reload, setReload] = useState(0),
     [review, setReview] = useState(null);
+  const [reviewGroup, setReviewGroup] = useState("all");
   let bounds, rangeError;
   try {
     bounds = reportRange({
@@ -56,28 +58,41 @@ export default function BusinessReport() {
   const refresh = () => setReload((value) => value + 1);
   const paidTotal =
     breakdown?.payments.reduce((sum, row) => sum + row.salesCents, 0) || 0;
+  const issueGroup = (issue) =>
+    issue.code === "classification_review"
+      ? "classification"
+      : issue.code === "cost_review"
+        ? "cost"
+        : "reconciliation";
+  const reviewGroups = [
+    ["classification", "Product classification"],
+    ["cost", "Costs"],
+    ["reconciliation", "Reconciliation"],
+  ];
   return (
     <ReportFrame
       title="Business Report"
       generatedAt={data?.generatedAt}
       onRefresh={refresh}
+      period={
+        <ReportPeriod
+          {...{
+            range,
+            customStart,
+            customEnd,
+            lookbackAmount,
+            lookbackUnit,
+            bounds,
+          }}
+          onRange={setRange}
+          onStart={setStart}
+          onEnd={setEnd}
+          onAmount={setAmount}
+          onUnit={setUnit}
+          error={rangeError}
+        />
+      }
     >
-      <ReportPeriod
-        {...{
-          range,
-          customStart,
-          customEnd,
-          lookbackAmount,
-          lookbackUnit,
-          bounds,
-        }}
-        onRange={setRange}
-        onStart={setStart}
-        onEnd={setEnd}
-        onAmount={setAmount}
-        onUnit={setUnit}
-        error={rangeError}
-      />
       {!rangeError && <ReportState state={state} />}
       {data && !rangeError && (
         <>
@@ -86,13 +101,27 @@ export default function BusinessReport() {
             role="tablist"
             aria-label="Business report sections"
             onKeyDown={(event) => {
-              if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
-              const tabs=[...event.currentTarget.querySelectorAll('[role="tab"]')];
-              const current=tabs.indexOf(document.activeElement);
-              if(current<0)return;
+              if (
+                !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+              )
+                return;
+              const tabs = [
+                ...event.currentTarget.querySelectorAll('[role="tab"]'),
+              ];
+              const current = tabs.indexOf(document.activeElement);
+              if (current < 0) return;
               event.preventDefault();
-              const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(current+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
-              tabs[next].click();tabs[next].focus();
+              const next =
+                event.key === "Home"
+                  ? 0
+                  : event.key === "End"
+                    ? tabs.length - 1
+                    : (current +
+                        (event.key === "ArrowRight" ? 1 : -1) +
+                        tabs.length) %
+                      tabs.length;
+              tabs[next].click();
+              tabs[next].focus();
             }}
           >
             {[
@@ -160,24 +189,38 @@ export default function BusinessReport() {
                     note="Excludes packaging and waste"
                   />
                 </div>
-                {!metrics.profitReady && (
-                  <div className="report-notice report-notice-warning">
-                    <h2>Profit pending review</h2>
-                    <p>
-                      {metrics.unclassifiedCount} unclassified cash-outs (
-                      {money(metrics.unclassifiedCents)}) and{" "}
-                      {metrics.issueCount} receipt or cash-data issues need
-                      review. A profit amount is hidden until these inputs are
-                      resolved.
-                    </p>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => setTab("review")}
-                    >
-                      Review outstanding records
-                    </button>
+                <div
+                  className={`report-notice report-profit-status ${!metrics.profitReady ? "report-notice-warning" : ""}`}
+                >
+                  <div>
+                    <h2>
+                      {metrics.profitReady
+                        ? "Operating profit"
+                        : "Profit pending review"}
+                    </h2>
+                    {metrics.profitReady ? (
+                      <strong className="report-profit-amount">
+                        {money(metrics.operatingProfitCents)}
+                      </strong>
+                    ) : (
+                      <p>
+                        {metrics.unclassifiedCount} unclassified cash-outs (
+                        {money(metrics.unclassifiedCents)}) and{" "}
+                        {metrics.issueCount} receipt or cash-data issues.
+                      </p>
+                    )}
                   </div>
-                )}
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() =>
+                      setTab(metrics.profitReady ? "profit" : "review")
+                    }
+                  >
+                    {metrics.profitReady
+                      ? "View profit calculation"
+                      : "Review outstanding records"}
+                  </button>
+                </div>
                 <div className="report-columns">
                   <BarPanel
                     title="Customer sales by hour"
@@ -192,11 +235,11 @@ export default function BusinessReport() {
                     description="Quantity sold. Packaging and milk/waste are excluded."
                   />
                 </div>
-                <p className="report-help">
+                <ReportExplanation title="What is included in the overview?">
                   {metrics.wasteRecordCount} waste-only records are separate
                   from customer transactions. Sales use POS-recorded amounts; no
                   separate tax amount is recorded.
-                </p>
+                </ReportExplanation>
               </>
             )}
             {tab === "sales" && (
@@ -317,8 +360,8 @@ export default function BusinessReport() {
               </>
             )}
             {tab === "profit" && (
-              <div className="report-columns">
-                <article className="report-panel">
+              <>
+                <article className="report-panel report-profit-calculation">
                   <h2>Operating profit</h2>
                   <p className="report-help">
                     All payment methods · {bounds.startDate} to {bounds.endDate}
@@ -353,6 +396,12 @@ export default function BusinessReport() {
                           : "Needs cost review",
                       ],
                       [
+                        "Total operating expenses",
+                        metrics.costReady && metrics.cashReady
+                          ? metrics.operatingExpenseCents
+                          : "Needs review",
+                      ],
+                      [
                         "Operating profit",
                         metrics.profitReady
                           ? metrics.operatingProfitCents
@@ -361,13 +410,13 @@ export default function BusinessReport() {
                       ],
                     ]}
                   />
-                  <p className="report-help">
+                  <ReportExplanation>
                     Product costs include ingredients. Waste is deducted once,
                     separately from goods sold. Stock purchases and owner
                     withdrawals are not operating expenses. This recorded result
                     is before tax and financing costs; unrecorded expenses and
                     depreciation are not included.
-                  </p>
+                  </ReportExplanation>
                   {!metrics.profitReady && (
                     <button
                       className="btn btn-secondary"
@@ -377,74 +426,102 @@ export default function BusinessReport() {
                     </button>
                   )}
                 </article>
-                <article className="report-panel">
-                  <h2>Physical cash-out breakdown</h2>
-                  <MoneyTable
-                    rows={[
-                      ["Operating expenses", metrics.operatingCashOutCents],
-                      ["Stock purchases", metrics.stockPurchaseCents],
-                      ["Owner withdrawals", metrics.ownerWithdrawalCents],
-                      [
-                        "Unclassified — needs review",
-                        metrics.unclassifiedCents,
-                      ],
-                      [
-                        "Total cash out",
-                        metrics.cashReady
-                          ? metrics.cashOutCents
-                          : "Needs review",
-                        true,
-                      ],
-                    ]}
-                  />
-                  <Link to="/cash?review=1">
-                    Review cash-out categories in Monthly Reports
-                  </Link>
-                  <h2 className="report-spaced-heading">
-                    Recorded drawer movement
-                  </h2>
-                  <MoneyTable
-                    rows={[
-                      [
-                        "Cash portions of customer sales",
-                        metrics.cashReady
-                          ? metrics.cashSalesCents
-                          : "Needs payment review",
-                      ],
-                      ["Manual cash in", metrics.cashInCents],
-                      ["Less: cash out", metrics.cashOutCents],
-                      [
-                        "Recorded drawer movement",
-                        metrics.cashReady
-                          ? metrics.drawerMovementCents
-                          : "Pending cash review",
-                        true,
-                      ],
-                    ]}
-                  />
-                  <p className="report-help">
-                    Movement only. This is not profit, a counted drawer balance,
-                    or total collections across all payment methods.
-                  </p>
-                </article>
-              </div>
+                <div className="report-columns">
+                  <article className="report-panel">
+                    <h2>Physical cash-out breakdown</h2>
+                    <MoneyTable
+                      rows={[
+                        ["Operating expenses", metrics.operatingCashOutCents],
+                        ["Stock purchases", metrics.stockPurchaseCents],
+                        ["Owner withdrawals", metrics.ownerWithdrawalCents],
+                        [
+                          "Unclassified — needs review",
+                          metrics.unclassifiedCents,
+                        ],
+                        [
+                          "Total cash out",
+                          metrics.cashReady
+                            ? metrics.cashOutCents
+                            : "Needs review",
+                          true,
+                        ],
+                      ]}
+                    />
+                    <Link to="/cash?review=1">
+                      Review cash-out categories in Monthly Reports
+                    </Link>
+                  </article>
+                  <article className="report-panel">
+                    <h2>Recorded drawer movement</h2>
+                    <MoneyTable
+                      rows={[
+                        [
+                          "Cash portions of customer sales",
+                          metrics.cashReady
+                            ? metrics.cashSalesCents
+                            : "Needs payment review",
+                        ],
+                        ["Manual cash in", metrics.cashInCents],
+                        ["Less: cash out", metrics.cashOutCents],
+                        [
+                          "Recorded drawer movement",
+                          metrics.cashReady
+                            ? metrics.drawerMovementCents
+                            : "Pending cash review",
+                          true,
+                        ],
+                      ]}
+                    />
+                    <ReportExplanation title="What drawer movement means">
+                      Movement only. This is not profit, a counted drawer
+                      balance, or total collections across all payment methods.
+                    </ReportExplanation>
+                  </article>
+                </div>
+              </>
             )}
             {tab === "review" && (
               <>
-                <div className="report-notice">
+                <div className="report-notice report-review-intro">
                   <h2>
                     {metrics.profitReady
                       ? "Report inputs reconcile"
                       : "Profit pending review"}
                   </h2>
                   <p>
-                    Reviewed costs and complete expense records are required.
-                    Suggestions from notes do not count as reviewed categories.
+                    Review the groups below to complete the profit calculation.
                   </p>
                   <Link to="/cash?review=1">
                     Review {metrics.unclassifiedCount} unclassified cash-outs (
                     {money(metrics.unclassifiedCents)})
                   </Link>
+                </div>
+                <div
+                  className="report-group-filters"
+                  role="group"
+                  aria-label="Review issue groups"
+                >
+                  <button
+                    aria-pressed={reviewGroup === "all"}
+                    onClick={() => setReviewGroup("all")}
+                  >
+                    All receipt issues ({breakdown.issues.length})
+                  </button>
+                  {reviewGroups.map(([key, label]) => (
+                    <button
+                      key={key}
+                      aria-pressed={reviewGroup === key}
+                      onClick={() => setReviewGroup(key)}
+                    >
+                      {label} (
+                      {
+                        breakdown.issues.filter(
+                          (issue) => issueGroup(issue) === key,
+                        ).length
+                      }
+                      )
+                    </button>
+                  ))}
                 </div>
                 <article className="report-panel">
                   <h2>Receipt and cost issues</h2>
@@ -462,41 +539,53 @@ export default function BusinessReport() {
                           </tr>
                         </thead>
                         <tbody>
-                          {breakdown.issues.map((issue, index) => (
-                            <tr key={index}>
-                              <td>
-                                {issue.transaction.receiptNo ||
-                                  issue.transaction.id}
-                                <br />
-                                <small>
-                                  {reportDateTime(issue.transaction.datetime)}
-                                </small>
-                              </td>
-                              <td>
-                                {issue.line?.name || "Receipt / payments"}
-                              </td>
-                              <td>
-                                {issue.message}
-                                {issue.differenceCents != null && (
-                                  <div>
-                                    Difference: {money(issue.differenceCents)}
-                                  </div>
-                                )}
-                              </td>
-                              <td>
-                                <button
-                                  className="btn btn-secondary btn-sm"
-                                  onClick={() => setReview(issue)}
-                                >
-                                  Review record
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
+                          {breakdown.issues
+                            .filter(
+                              (issue) =>
+                                reviewGroup === "all" ||
+                                issueGroup(issue) === reviewGroup,
+                            )
+                            .map((issue, index) => (
+                              <tr key={index}>
+                                <td>
+                                  {issue.transaction.receiptNo ||
+                                    issue.transaction.id}
+                                  <br />
+                                  <small>
+                                    {reportDateTime(issue.transaction.datetime)}
+                                  </small>
+                                </td>
+                                <td>
+                                  {issue.line?.name || "Receipt / payments"}
+                                </td>
+                                <td>
+                                  {issue.message}
+                                  {issue.differenceCents != null && (
+                                    <div>
+                                      Difference: {money(issue.differenceCents)}
+                                    </div>
+                                  )}
+                                </td>
+                                <td>
+                                  <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => setReview(issue)}
+                                  >
+                                    Review record
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
                         </tbody>
                       </table>
                     </div>
                   )}
+                  {breakdown.issues.length > 0 &&
+                    !breakdown.issues.some(
+                      (issue) =>
+                        reviewGroup === "all" ||
+                        issueGroup(issue) === reviewGroup,
+                    ) && <p>No outstanding issues in this group.</p>}
                 </article>
                 {data.cashEntries.some(
                   (row) =>
