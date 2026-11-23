@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { REPORT_MIGRATION_URL, money } from "../../utils/reporting";
 import { reportDateTime } from "../../utils/reportDates";
 import "../../styles/reports.css";
@@ -10,33 +10,40 @@ export function ReportFrame({
   generatedAt,
   onRefresh,
   actions,
+  period,
 }) {
   return (
     <section className="reports-surface">
       <header className="report-heading">
-        <div>
-          <p className="report-eyebrow">92PARAMETERS / REPORTS</p>
-          <h1>{title}</h1>
-          <p className="report-subtitle">
-            Recorded POS amounts · Philippine business time · PHP
-          </p>
-        </div>
-        <div className="report-actions">
-          {actions}
+        <h1 className="report-sr-only">{title}</h1>
+        <nav className="report-links" aria-label="Report views">
+          <NavLink to="/reports" end>
+            Business
+          </NavLink>
+          <NavLink to="/transactions">Transactions</NavLink>
+          <NavLink to="/cash">Cash</NavLink>
+        </nav>
+        {actions && <div className="report-actions">{actions}</div>}
+      </header>
+      <div className="report-toolbar">
+        {period}
+        <div className="report-refresh">
           <button className="btn btn-secondary" onClick={onRefresh}>
             Refresh report
           </button>
+          <p className="report-asof">
+            {generatedAt
+              ? `As of ${reportDateTime(generatedAt)}`
+              : "Waiting for complete report"}
+          </p>
         </div>
-      </header>
-      <nav className="report-links" aria-label="Report views">
-        <Link to="/reports">Business overview</Link>
-        <Link to="/transactions">Transactions</Link>
-        <Link to="/cash">Cash drawer & monthly reports</Link>
-      </nav>
-      {generatedAt && (
-        <p className="report-asof">As of {reportDateTime(generatedAt)}</p>
-      )}
+      </div>
       {children}
+      <ReportExplanation title="About these figures">
+        POS-recorded amounts · Philippine business time (Asia/Manila) · PHP.
+        Sales are after discounts and loyalty reductions. No separate tax amount
+        is recorded.
+      </ReportExplanation>
     </section>
   );
 }
@@ -83,17 +90,13 @@ export function ReportPeriod({
   error,
 }) {
   return (
-    <div className="report-panel report-period">
+    <div className="report-period">
       <div className="report-range-tabs" aria-label="Report period">
         {[
           ["today", "Today"],
-          ["yesterday", "Yesterday"],
           ["week", "7 Days"],
           ["month", "30 Days"],
-          ["year", "365 Days"],
-          ["lookback", "Look Back"],
           ["custom", "Custom"],
-          ["all", "All Time"],
         ].map(([key, label]) => (
           <button
             key={key}
@@ -103,6 +106,23 @@ export function ReportPeriod({
             {label}
           </button>
         ))}
+        <select
+          aria-label="More periods"
+          value={
+            ["yesterday", "year", "lookback", "all"].includes(range)
+              ? range
+              : ""
+          }
+          onChange={(event) => onRange(event.target.value)}
+        >
+          <option value="" disabled>
+            More periods
+          </option>
+          <option value="yesterday">Yesterday</option>
+          <option value="year">365 Days</option>
+          <option value="lookback">Look Back</option>
+          <option value="all">All Time</option>
+        </select>
       </div>
       {range === "custom" && (
         <div className="report-filter-row">
@@ -157,32 +177,83 @@ export function ReportPeriod({
       ) : (
         bounds && (
           <p className="report-period-label">
-            {bounds.startDate} — {bounds.endDate}, inclusive · Asia/Manila
+            {formatPeriodDate(bounds.startDate)} —{" "}
+            {formatPeriodDate(bounds.endDate)} · inclusive
           </p>
         )
       )}
     </div>
   );
 }
-export function Metric({ label, value, note, tone }) {
+export function Metric({ label, value, note, tone, onOpen }) {
   return (
     <div className={`report-metric ${tone ? `report-metric-${tone}` : ""}`}>
       <h2>{label}</h2>
-      <strong>{value}</strong>
+      {onOpen ? (
+        <button
+          type="button"
+          className="report-figure-button"
+          aria-label={`View ${label} records`}
+          onClick={onOpen}
+        >
+          <strong>{value}</strong>
+          <span className="report-figure-hint">View records ↗</span>
+        </button>
+      ) : (
+        <strong>{value}</strong>
+      )}
       {note && <p>{note}</p>}
     </div>
   );
 }
-export function MoneyTable({ rows, caption }) {
+function formatPeriodDate(value) {
+  if (!value) return "All recorded dates";
+  return new Intl.DateTimeFormat("en-PH", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Manila",
+  }).format(new Date(`${value}T00:00:00+08:00`));
+}
+export function ReportExplanation({
+  title = "How this is calculated",
+  children,
+}) {
+  return (
+    <details className="report-explanation">
+      <summary>{title}</summary>
+      <div className="report-help">{children}</div>
+    </details>
+  );
+}
+export function MoneyTable({ rows, caption, onOpen }) {
   return (
     <div className="report-table-wrap">
       <table className="report-table">
         {caption && <caption>{caption}</caption>}
         <tbody>
-          {rows.map(([label, value, strong]) => (
+          {rows.map(([label, value, strong, figure]) => (
             <tr key={label} className={strong ? "report-total" : ""}>
               <th scope="row">{label}</th>
-              <td>{typeof value === "number" ? money(value) : value}</td>
+              <td>
+                {onOpen && figure ? (
+                  <button
+                    type="button"
+                    className="report-amount-button"
+                    aria-label={`View ${label} records`}
+                    onClick={() => onOpen(figure)}
+                  >
+                    <span>
+                      {typeof value === "number" ? money(value) : value}
+                    </span>
+                    <span aria-hidden="true"> ↗</span>
+                  </button>
+                ) : typeof value === "number" ? (
+                  money(value)
+                ) : (
+                  value
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -212,15 +283,15 @@ export function BarPanel({
         <p className="report-help">No records for this selection.</p>
       ) : (
         <>
-          <div
-            className="report-bars"
-            role="img"
-            aria-label={`${title}. Exact values follow in the data table.`}
-          >
+          <div className="report-bars" role="list" aria-label={title}>
             {rows.map((row, index) => (
-              <div className="report-bar-row" key={`${row.name}-${index}`}>
+              <div
+                role="listitem"
+                className="report-bar-row"
+                key={`${row.name}-${index}`}
+              >
                 <span className="report-bar-name">{row.name}</span>
-                <div className="report-bar-track">
+                <div className="report-bar-track" aria-hidden="true">
                   <div
                     className="report-bar"
                     style={{
@@ -228,11 +299,8 @@ export function BarPanel({
                     }}
                   />
                 </div>
-                <span className="report-bar-value" tabIndex="0">
+                <span className="report-bar-value">
                   {format(row[valueKey])}
-                  <span role="tooltip" className="report-chart-tooltip">
-                    {row.name}: {format(row[valueKey])}
-                  </span>
                 </span>
               </div>
             ))}

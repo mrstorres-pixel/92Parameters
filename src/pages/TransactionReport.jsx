@@ -17,17 +17,15 @@ import { adjustIngredientStock } from "../utils/stockAdjustments";
 import { formatPaymentLabel, PAYMENT_METHODS } from "../utils/payments";
 import { reverseLoyaltyForTransaction } from "../utils/loyalty";
 import useReport from "../hooks/useReport";
-import {
-  businessDate,
-  reportRange,
-  reportDateTime,
-} from "../utils/reportDates";
+import { reportRange, reportDateTime } from "../utils/reportDates";
 import { money, periodParams, requestReport } from "../utils/reporting";
 import {
   ReportFrame,
   ReportState,
   ReportPeriod,
 } from "../components/reports/ReportUI";
+import { useReportPeriod } from "../stores/reportPeriodStore";
+import ReportRecordsDialog from "../components/reports/ReportRecordsDialog";
 
 function formatAdjustment(percent, amount) {
   const parts = [];
@@ -46,11 +44,19 @@ export default function TransactionReport() {
   const [exportBusy, setExportBusy] = useState(false);
   const [staff, setStaff] = useState([]);
   const [search, setSearch] = useState("");
-  const [range, setRange] = useState("today");
-  const [lookbackAmount, setLookbackAmount] = useState(8);
-  const [lookbackUnit, setLookbackUnit] = useState("months");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState(businessDate());
+  const {
+    range,
+    setRange,
+    lookbackAmount,
+    setAmount: setLookbackAmount,
+    lookbackUnit,
+    setUnit: setLookbackUnit,
+    customStart,
+    setStart: setCustomStart,
+    customEnd,
+    setEnd: setCustomEnd,
+  } = useReportPeriod();
+  const [records, setRecords] = useState(null);
   const [paymentFilter, setPaymentFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [staffFilter, setStaffFilter] = useState("All");
@@ -110,6 +116,16 @@ export default function TransactionReport() {
   );
   const report = state.data;
   const txns = report?.transactions || [];
+  const openRecords = (figure) =>
+    setRecords({
+      figure,
+      expected: report,
+      payment: paymentFilter,
+      request: {
+        name: "report_transactions_v2",
+        params: { ...params, p_offset: 0, p_limit: 0 },
+      },
+    });
   function load() {
     setReload((value) => value + 1);
   }
@@ -290,6 +306,24 @@ export default function TransactionReport() {
       title="Transaction Report"
       generatedAt={report?.generatedAt}
       onRefresh={load}
+      period={
+        <ReportPeriod
+          {...{
+            range,
+            customStart,
+            customEnd,
+            lookbackAmount,
+            lookbackUnit,
+            bounds,
+          }}
+          onRange={setRange}
+          onStart={setCustomStart}
+          onEnd={setCustomEnd}
+          onAmount={setLookbackAmount}
+          onUnit={setLookbackUnit}
+          error={rangeError}
+        />
+      }
       actions={
         <button
           className="btn btn-secondary"
@@ -301,75 +335,75 @@ export default function TransactionReport() {
         </button>
       }
     >
-      <ReportPeriod
-        {...{
-          range,
-          customStart,
-          customEnd,
-          lookbackAmount,
-          lookbackUnit,
-          bounds,
-        }}
-        onRange={setRange}
-        onStart={setCustomStart}
-        onEnd={setCustomEnd}
-        onAmount={setLookbackAmount}
-        onUnit={setLookbackUnit}
-        error={rangeError}
-      />
-
-      <div className="toolbar">
-        <div className="search-bar">
-          <Search size={16} />
-          <input
-            aria-label="Search receipts"
-            placeholder="Search receipt #, staff, payment..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <div className="report-filters">
+        <div className="report-filters-primary">
+          <div className="search-bar">
+            <Search size={16} />
+            <input
+              aria-label="Search receipts"
+              placeholder="Search receipt #, staff, payment..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <label className="report-field">
+            Payment method
+            <select
+              aria-label="Payment method"
+              className="form-select"
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value)}
+            >
+              {paymentOptions.map((method) => (
+                <option key={method} value={method}>
+                  {method === "All" ? "All Payments" : method}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-        <select
-          aria-label="Payment method"
-          className="form-select"
-          style={{ width: 160 }}
-          value={paymentFilter}
-          onChange={(e) => setPaymentFilter(e.target.value)}
-        >
-          {paymentOptions.map((method) => (
-            <option key={method} value={method}>
-              {method === "All" ? "All Payments" : method}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Receipt status"
-          className="form-select"
-          style={{ width: 150 }}
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="All">All Statuses</option>
-          <option value="completed">Completed</option>
-          <option value="void">Void</option>
-        </select>
-        <select
-          aria-label="Staff filter"
-          className="form-select"
-          style={{ width: 180 }}
-          value={staffFilter}
-          onChange={(e) => setStaffFilter(e.target.value)}
-        >
-          <option value="All">All Staff</option>
-          {staff.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-        <span className="text-muted text-sm">
+        <details className="report-explanation">
+          <summary>
+            More filters (
+            {Number(statusFilter !== "All") + Number(staffFilter !== "All")}{" "}
+            active)
+          </summary>
+          <div className="report-filter-row">
+            <label className="report-field">
+              Receipt status
+              <select
+                aria-label="Receipt status"
+                className="form-select"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="All">All Statuses</option>
+                <option value="completed">Completed</option>
+                <option value="void">Void</option>
+              </select>
+            </label>
+            <label className="report-field">
+              Staff
+              <select
+                aria-label="Staff filter"
+                className="form-select"
+                value={staffFilter}
+                onChange={(e) => setStaffFilter(e.target.value)}
+              >
+                <option value="All">All Staff</option>
+                {staff.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </details>
+        <p className="report-help report-matching-count">
           Showing {report?.matchingCount || 0} matching record
           {report?.matchingCount !== 1 ? "s" : ""} in the full period
-        </span>
+        </p>
       </div>
 
       {!rangeError && <ReportState state={state} />}
@@ -382,33 +416,72 @@ export default function TransactionReport() {
                   ? "Full-period sales"
                   : "Full value of matching receipts"}
               </div>
-              <div className="stat-value">
-                {report.totals.salesReady ? money(totalSales) : "Needs review"}
-              </div>
+              <button
+                className="report-figure-button"
+                aria-label="View transaction sales records"
+                onClick={() => openRecords("sales")}
+              >
+                <div className="stat-value">
+                  {report.totals.salesReady
+                    ? money(totalSales)
+                    : "Needs review"}
+                </div>
+                <span className="report-figure-hint">View records ↗</span>
+              </button>
             </div>
             <div className="stat-card">
               <div className="stat-label">Customer transactions</div>
-              <div className="stat-value">{report.totals.transactionCount}</div>
+              <button
+                className="report-figure-button"
+                aria-label="View customer transaction records"
+                onClick={() => openRecords("transactions")}
+              >
+                <div className="stat-value">
+                  {report.totals.transactionCount}
+                </div>
+                <span className="report-figure-hint">View records ↗</span>
+              </button>
             </div>
             <div className="stat-card">
               <div className="stat-label">Voids</div>
-              <div className="stat-value" style={{ color: "var(--danger)" }}>
-                {report.totals.voidCount}
-              </div>
+              <button
+                className="report-figure-button"
+                aria-label="View void records"
+                onClick={() => openRecords("voids")}
+              >
+                <div className="stat-value" style={{ color: "var(--danger)" }}>
+                  {report.totals.voidCount}
+                </div>
+                <span className="report-figure-hint">View records ↗</span>
+              </button>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Average Ticket</div>
-              <div className="stat-value">
-                {report.totals.salesReady ? money(avgTicket) : "Needs review"}
-              </div>
+              <div className="stat-label">Average Customer Sale</div>
+              <button
+                className="report-figure-button"
+                aria-label="View average customer sale records"
+                onClick={() => openRecords("average")}
+              >
+                <div className="stat-value">
+                  {report.totals.salesReady ? money(avgTicket) : "Needs review"}
+                </div>
+                <span className="report-figure-hint">View records ↗</span>
+              </button>
             </div>
           </div>
 
           {paymentFilter !== "All" && (
             <div className="report-notice">
-              <strong>
-                {paymentFilter} portions: {money(report.selectedPaymentCents)}
-              </strong>
+              <button
+                className="report-amount-button"
+                onClick={() => openRecords("selectedPayment")}
+                aria-label={`View ${paymentFilter} portion records`}
+              >
+                <strong>
+                  {paymentFilter} portions: {money(report.selectedPaymentCents)}
+                </strong>
+                <span aria-hidden="true"> ↗</span>
+              </button>
               <p>
                 Full receipt values include all portions of matching
                 split-payment receipts.
@@ -441,16 +514,16 @@ export default function TransactionReport() {
           </div>
 
           <div className="table-container">
-            <table className="data-table">
+            <table className="data-table report-record-table">
               <thead>
                 <tr>
-                  <th>Date / Time</th>
+                  <th className="report-secondary-column">Date / Time</th>
                   <th>Receipt #</th>
-                  <th>Type</th>
-                  <th>Items</th>
+                  <th className="report-secondary-column">Type</th>
+                  <th className="report-secondary-column">Items</th>
                   <th>Payment</th>
-                  <th>Staff</th>
-                  <th>Receipt total</th>
+                  <th className="report-secondary-column">Staff</th>
+                  <th className="report-money">Receipt total</th>
                   {paymentFilter !== "All" && <th>{paymentFilter} portion</th>}
                   <th>Status</th>
                   <th>Actions</th>
@@ -459,14 +532,26 @@ export default function TransactionReport() {
               <tbody>
                 {filtered.map((t) => (
                   <tr key={t.id}>
-                    <td>{reportDateTime(t.datetime)}</td>
-                    <td style={{ fontWeight: 600, color: "var(--accent)" }}>
-                      {t.receiptNo}
+                    <td className="report-secondary-column">
+                      {reportDateTime(t.datetime)}
                     </td>
-                    <td>
+                    <td
+                      data-label="Receipt"
+                      className="report-record-identity"
+                      style={{ fontWeight: 600, color: "var(--accent)" }}
+                    >
+                      {t.receiptNo}
+                      <span className="report-record-date">
+                        {reportDateTime(t.datetime)}
+                      </span>
+                    </td>
+                    <td className="report-secondary-column">
                       <span className="badge badge-neutral">{t.orderType}</span>
                     </td>
-                    <td className="truncate" style={{ maxWidth: 200 }}>
+                    <td
+                      className="truncate report-secondary-column"
+                      style={{ maxWidth: 200 }}
+                    >
                       {(t.items || [])
                         .map(
                           (i) =>
@@ -474,7 +559,7 @@ export default function TransactionReport() {
                         )
                         .join(", ")}
                     </td>
-                    <td>
+                    <td data-label="Payment">
                       {t.report.payments.map((p) => p.method).join(" + ") ||
                         (t.report.totalCents === 0
                           ? "No payment (free)"
@@ -485,12 +570,21 @@ export default function TransactionReport() {
                         </div>
                       )}
                     </td>
-                    <td>{t.staffName || "—"}</td>
-                    <td style={{ fontWeight: 600 }}>
+                    <td className="report-secondary-column">
+                      {t.staffName || "—"}
+                    </td>
+                    <td
+                      data-label="Receipt total"
+                      className="report-money"
+                      style={{ fontWeight: 600 }}
+                    >
                       {money(t.report.totalCents)}
                     </td>
                     {paymentFilter !== "All" && (
-                      <td>
+                      <td
+                        data-label={`${paymentFilter} portion`}
+                        className="report-money"
+                      >
                         {money(
                           t.report.payments
                             .filter((p) => p.method === paymentFilter)
@@ -498,24 +592,24 @@ export default function TransactionReport() {
                         )}
                       </td>
                     )}
-                    <td>
+                    <td data-label="Status">
                       {t.status === "void" ? (
                         <span className="void-stamp">VOID</span>
                       ) : (
                         <span className="badge badge-success">Completed</span>
                       )}
                     </td>
-                    <td>
+                    <td className="report-record-actions">
                       <div className="flex gap-8">
                         <button
-                          className="btn btn-ghost btn-icon btn-sm"
+                          className="btn btn-secondary btn-sm"
                           onClick={() => setSelected(t)}
-                          title="View"
+                          aria-label={`Details for ${t.receiptNo}`}
                         >
-                          <Eye size={14} />
+                          <Eye size={18} /> Details
                         </button>
                         <button
-                          className="btn btn-ghost btn-icon btn-sm"
+                          className="btn btn-ghost btn-icon btn-sm report-secondary-column"
                           onClick={() => setShowReceipt(t)}
                           title="Receipt"
                         >
@@ -523,7 +617,7 @@ export default function TransactionReport() {
                         </button>
                         {t.status !== "void" && (
                           <button
-                            className="btn btn-ghost btn-icon btn-sm"
+                            className="btn btn-ghost btn-icon btn-sm report-secondary-column"
                             onClick={() => setShowVoid(t)}
                             title="Void"
                           >
@@ -532,7 +626,7 @@ export default function TransactionReport() {
                         )}
                         {isOwner && (
                           <button
-                            className="btn btn-ghost btn-icon btn-sm"
+                            className="btn btn-ghost btn-icon btn-sm report-secondary-column"
                             onClick={() => deleteTransaction(t)}
                             title="Delete"
                           >
@@ -938,6 +1032,13 @@ export default function TransactionReport() {
         <ReceiptModal
           transaction={showReceipt}
           onClose={() => setShowReceipt(null)}
+        />
+      )}
+      {records && (
+        <ReportRecordsDialog
+          {...records}
+          onClose={() => setRecords(null)}
+          onRefresh={load}
         />
       )}
     </ReportFrame>

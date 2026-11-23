@@ -1,7 +1,14 @@
 import React, { useEffect, useId, useRef } from "react";
 import { X } from "lucide-react";
 
-export default function Modal({ title, onClose, children, footer, large }) {
+export default function Modal({
+  title,
+  onClose,
+  children,
+  footer,
+  large,
+  overlayClassName = "",
+}) {
   const titleId = useId();
   const dialog = useRef(null);
   const close = useRef(onClose);
@@ -18,8 +25,14 @@ export default function Modal({ title, onClose, children, footer, large }) {
     if (!node.contains(document.activeElement))
       (focusable()[0] || node).focus();
     const keydown = (event) => {
-      const dialogs = document.querySelectorAll('[role="dialog"]');
-      if (dialogs[dialogs.length - 1] !== node) return;
+      const dialogs = [...document.querySelectorAll('[role="dialog"]')];
+      const topDialog = dialogs.reduce((top, current) => {
+        const layer = (element) =>
+          Number(getComputedStyle(element.closest(".modal-overlay")).zIndex) ||
+          0;
+        return !top || layer(current) >= layer(top) ? current : top;
+      }, null);
+      if (topDialog !== node) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -54,7 +67,7 @@ export default function Modal({ title, onClose, children, footer, large }) {
     };
   }, []);
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className={`modal-overlay ${overlayClassName}`} onClick={onClose}>
       <div
         ref={dialog}
         role="dialog"
