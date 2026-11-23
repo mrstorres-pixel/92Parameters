@@ -17,17 +17,15 @@ import { adjustIngredientStock } from "../utils/stockAdjustments";
 import { formatPaymentLabel, PAYMENT_METHODS } from "../utils/payments";
 import { reverseLoyaltyForTransaction } from "../utils/loyalty";
 import useReport from "../hooks/useReport";
-import {
-  businessDate,
-  reportRange,
-  reportDateTime,
-} from "../utils/reportDates";
+import { reportRange, reportDateTime } from "../utils/reportDates";
 import { money, periodParams, requestReport } from "../utils/reporting";
 import {
   ReportFrame,
   ReportState,
   ReportPeriod,
 } from "../components/reports/ReportUI";
+import { useReportPeriod } from "../stores/reportPeriodStore";
+import ReportRecordsDialog from "../components/reports/ReportRecordsDialog";
 
 function formatAdjustment(percent, amount) {
   const parts = [];
@@ -46,11 +44,19 @@ export default function TransactionReport() {
   const [exportBusy, setExportBusy] = useState(false);
   const [staff, setStaff] = useState([]);
   const [search, setSearch] = useState("");
-  const [range, setRange] = useState("today");
-  const [lookbackAmount, setLookbackAmount] = useState(8);
-  const [lookbackUnit, setLookbackUnit] = useState("months");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState(businessDate());
+  const {
+    range,
+    setRange,
+    lookbackAmount,
+    setAmount: setLookbackAmount,
+    lookbackUnit,
+    setUnit: setLookbackUnit,
+    customStart,
+    setStart: setCustomStart,
+    customEnd,
+    setEnd: setCustomEnd,
+  } = useReportPeriod();
+  const [records, setRecords] = useState(null);
   const [paymentFilter, setPaymentFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [staffFilter, setStaffFilter] = useState("All");
@@ -110,6 +116,16 @@ export default function TransactionReport() {
   );
   const report = state.data;
   const txns = report?.transactions || [];
+  const openRecords = (figure) =>
+    setRecords({
+      figure,
+      expected: report,
+      payment: paymentFilter,
+      request: {
+        name: "report_transactions_v2",
+        params: { ...params, p_offset: 0, p_limit: 0 },
+      },
+    });
   function load() {
     setReload((value) => value + 1);
   }
@@ -400,33 +416,72 @@ export default function TransactionReport() {
                   ? "Full-period sales"
                   : "Full value of matching receipts"}
               </div>
-              <div className="stat-value">
-                {report.totals.salesReady ? money(totalSales) : "Needs review"}
-              </div>
+              <button
+                className="report-figure-button"
+                aria-label="View transaction sales records"
+                onClick={() => openRecords("sales")}
+              >
+                <div className="stat-value">
+                  {report.totals.salesReady
+                    ? money(totalSales)
+                    : "Needs review"}
+                </div>
+                <span className="report-figure-hint">View records ↗</span>
+              </button>
             </div>
             <div className="stat-card">
               <div className="stat-label">Customer transactions</div>
-              <div className="stat-value">{report.totals.transactionCount}</div>
+              <button
+                className="report-figure-button"
+                aria-label="View customer transaction records"
+                onClick={() => openRecords("transactions")}
+              >
+                <div className="stat-value">
+                  {report.totals.transactionCount}
+                </div>
+                <span className="report-figure-hint">View records ↗</span>
+              </button>
             </div>
             <div className="stat-card">
               <div className="stat-label">Voids</div>
-              <div className="stat-value" style={{ color: "var(--danger)" }}>
-                {report.totals.voidCount}
-              </div>
+              <button
+                className="report-figure-button"
+                aria-label="View void records"
+                onClick={() => openRecords("voids")}
+              >
+                <div className="stat-value" style={{ color: "var(--danger)" }}>
+                  {report.totals.voidCount}
+                </div>
+                <span className="report-figure-hint">View records ↗</span>
+              </button>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Average Ticket</div>
-              <div className="stat-value">
-                {report.totals.salesReady ? money(avgTicket) : "Needs review"}
-              </div>
+              <div className="stat-label">Average Customer Sale</div>
+              <button
+                className="report-figure-button"
+                aria-label="View average customer sale records"
+                onClick={() => openRecords("average")}
+              >
+                <div className="stat-value">
+                  {report.totals.salesReady ? money(avgTicket) : "Needs review"}
+                </div>
+                <span className="report-figure-hint">View records ↗</span>
+              </button>
             </div>
           </div>
 
           {paymentFilter !== "All" && (
             <div className="report-notice">
-              <strong>
-                {paymentFilter} portions: {money(report.selectedPaymentCents)}
-              </strong>
+              <button
+                className="report-amount-button"
+                onClick={() => openRecords("selectedPayment")}
+                aria-label={`View ${paymentFilter} portion records`}
+              >
+                <strong>
+                  {paymentFilter} portions: {money(report.selectedPaymentCents)}
+                </strong>
+                <span aria-hidden="true"> ↗</span>
+              </button>
               <p>
                 Full receipt values include all portions of matching
                 split-payment receipts.
@@ -977,6 +1032,13 @@ export default function TransactionReport() {
         <ReceiptModal
           transaction={showReceipt}
           onClose={() => setShowReceipt(null)}
+        />
+      )}
+      {records && (
+        <ReportRecordsDialog
+          {...records}
+          onClose={() => setRecords(null)}
+          onRefresh={load}
         />
       )}
     </ReportFrame>

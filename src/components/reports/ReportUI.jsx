@@ -185,11 +185,23 @@ export function ReportPeriod({
     </div>
   );
 }
-export function Metric({ label, value, note, tone }) {
+export function Metric({ label, value, note, tone, onOpen }) {
   return (
     <div className={`report-metric ${tone ? `report-metric-${tone}` : ""}`}>
       <h2>{label}</h2>
-      <strong>{value}</strong>
+      {onOpen ? (
+        <button
+          type="button"
+          className="report-figure-button"
+          aria-label={`View ${label} records`}
+          onClick={onOpen}
+        >
+          <strong>{value}</strong>
+          <span className="report-figure-hint">View records ↗</span>
+        </button>
+      ) : (
+        <strong>{value}</strong>
+      )}
       {note && <p>{note}</p>}
     </div>
   );
@@ -214,16 +226,34 @@ export function ReportExplanation({
     </details>
   );
 }
-export function MoneyTable({ rows, caption }) {
+export function MoneyTable({ rows, caption, onOpen }) {
   return (
     <div className="report-table-wrap">
       <table className="report-table">
         {caption && <caption>{caption}</caption>}
         <tbody>
-          {rows.map(([label, value, strong]) => (
+          {rows.map(([label, value, strong, figure]) => (
             <tr key={label} className={strong ? "report-total" : ""}>
               <th scope="row">{label}</th>
-              <td>{typeof value === "number" ? money(value) : value}</td>
+              <td>
+                {onOpen && figure ? (
+                  <button
+                    type="button"
+                    className="report-amount-button"
+                    aria-label={`View ${label} records`}
+                    onClick={() => onOpen(figure)}
+                  >
+                    <span>
+                      {typeof value === "number" ? money(value) : value}
+                    </span>
+                    <span aria-hidden="true"> ↗</span>
+                  </button>
+                ) : typeof value === "number" ? (
+                  money(value)
+                ) : (
+                  value
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

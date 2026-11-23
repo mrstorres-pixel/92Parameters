@@ -37,7 +37,7 @@
   font: inherit;
 }
 .reports-surface :is(button, summary, a, input, select, textarea) {
-  -webkit-tap-highlight-color: #e0a63726;
+  -webkit-tap-highlight-color: transparent;
 }
 .reports-surface
   :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
@@ -310,6 +310,91 @@
   color: var(--text-secondary);
   margin-top: 8px;
 }
+.reports-surface .report-figure-button {
+  display: block;
+  width: 100%;
+  min-height: 72px;
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.report-figure-hint {
+  display: block;
+  color: #efbd65;
+  font-size: 0.875rem;
+  margin-top: 8px;
+}
+.reports-surface .report-figure-button:active,
+.reports-surface .report-amount-button:active {
+  background: #3a2c17;
+}
+.reports-surface .report-amount-button {
+  background: transparent;
+  color: #f4cf89;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px;
+  min-height: 48px;
+  min-width: 44px;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.report-source-list {
+  display: grid;
+  gap: 12px;
+}
+.report-source-record {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 0;
+}
+.report-source-heading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.report-source-heading h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+.report-source-heading strong {
+  font-variant-numeric: tabular-nums;
+}
+.report-source-record p {
+  overflow-wrap: anywhere;
+  margin: 6px 0;
+}
+.report-source-details {
+  display: grid;
+  gap: 8px;
+}
+.report-source-details dt {
+  color: var(--text-secondary);
+}
+.report-source-details dd {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.report-records-summary {
+  background: #332b1e;
+  border-radius: 8px;
+  padding: 16px;
+}
+.report-records-summary > strong {
+  display: block;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
 .report-columns {
   display: grid;
   grid-template-columns: 1fr;
@@ -574,6 +659,9 @@
 .reports-surface .modal-overlay {
   z-index: 1200;
   padding: 16px;
+}
+.reports-surface .report-source-overlay {
+  z-index: 1400;
 }
 .reports-surface .modal {
   background: var(--bg-card);

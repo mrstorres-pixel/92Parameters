@@ -1,11 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import useReport from "../hooks/useReport";
-import {
-  businessDate,
-  reportRange,
-  reportDateTime,
-} from "../utils/reportDates";
+import { reportRange, reportDateTime } from "../utils/reportDates";
 import {
   businessBreakdowns,
   money,
@@ -22,13 +18,23 @@ import {
   ReportExplanation,
 } from "../components/reports/ReportUI";
 import ReviewReportItem from "../components/reports/ReviewReportItem";
+import ReportRecordsDialog from "../components/reports/ReportRecordsDialog";
+import { useReportPeriod } from "../stores/reportPeriodStore";
 
 export default function BusinessReport() {
-  const [range, setRange] = useState("today"),
-    [customStart, setStart] = useState(""),
-    [customEnd, setEnd] = useState(businessDate());
-  const [lookbackAmount, setAmount] = useState(8),
-    [lookbackUnit, setUnit] = useState("months");
+  const {
+    range,
+    setRange,
+    customStart,
+    setStart,
+    customEnd,
+    setEnd,
+    lookbackAmount,
+    setAmount,
+    lookbackUnit,
+    setUnit,
+  } = useReportPeriod();
+  const [records, setRecords] = useState(null);
   const [tab, setTab] = useState("overview"),
     [payment, setPayment] = useState("All"),
     [reload, setReload] = useState(0),
@@ -56,6 +62,7 @@ export default function BusinessReport() {
     metrics = data ? reportMetrics(data) : null,
     breakdown = data ? businessBreakdowns(data) : null;
   const refresh = () => setReload((value) => value + 1);
+  const openRecords = (figure) => setRecords({ figure, source: data });
   const paidTotal =
     breakdown?.payments.reduce((sum, row) => sum + row.salesCents, 0) || 0;
   const issueGroup = (issue) =>
@@ -157,6 +164,7 @@ export default function BusinessReport() {
                 <div className="report-metrics">
                   <Metric
                     label="Sales"
+                    onOpen={() => openRecords("sales")}
                     value={
                       metrics.salesReady
                         ? money(metrics.salesCents)
@@ -166,11 +174,13 @@ export default function BusinessReport() {
                   />
                   <Metric
                     label="Customer Transactions"
+                    onOpen={() => openRecords("transactions")}
                     value={metrics.transactionCount}
                     note={`${metrics.freeCustomerCount} fully discounted customer sales included`}
                   />
                   <Metric
                     label="Average Customer Sale"
+                    onOpen={() => openRecords("average")}
                     value={
                       metrics.salesReady
                         ? money(
@@ -185,6 +195,7 @@ export default function BusinessReport() {
                   />
                   <Metric
                     label="Customer Items Sold"
+                    onOpen={() => openRecords("items")}
                     value={metrics.customerItems}
                     note="Excludes packaging and waste"
                   />
@@ -199,9 +210,13 @@ export default function BusinessReport() {
                         : "Profit pending review"}
                     </h2>
                     {metrics.profitReady ? (
-                      <strong className="report-profit-amount">
-                        {money(metrics.operatingProfitCents)}
-                      </strong>
+                      <button
+                        className="report-amount-button report-profit-amount"
+                        aria-label="View operating profit records"
+                        onClick={() => openRecords("operatingProfit")}
+                      >
+                        {money(metrics.operatingProfitCents)} ↗
+                      </button>
                     ) : (
                       <p>
                         {metrics.unclassifiedCount} unclassified cash-outs (
@@ -367,16 +382,21 @@ export default function BusinessReport() {
                     All payment methods · {bounds.startDate} to {bounds.endDate}
                   </p>
                   <MoneyTable
+                    onOpen={openRecords}
                     rows={[
                       [
                         "Sales after discounts",
                         metrics.salesReady
                           ? metrics.salesCents
                           : "Needs review",
+                        false,
+                        "sales",
                       ],
                       [
                         "Less: cost of goods sold",
                         metrics.costReady ? metrics.cogsCents : "Needs review",
+                        false,
+                        "cogs",
                       ],
                       [
                         "Gross profit",
@@ -384,22 +404,29 @@ export default function BusinessReport() {
                           ? metrics.grossProfitCents
                           : "Pending cost review",
                         true,
+                        "grossProfit",
                       ],
                       [
                         "Reviewed operating cash-out expenses",
                         metrics.operatingCashOutCents,
+                        false,
+                        "operatingCashOut",
                       ],
                       [
                         "Recorded waste expense",
                         metrics.costReady
                           ? metrics.wasteCents
                           : "Needs cost review",
+                        false,
+                        "waste",
                       ],
                       [
                         "Total operating expenses",
                         metrics.costReady && metrics.cashReady
                           ? metrics.operatingExpenseCents
                           : "Needs review",
+                        false,
+                        "operatingExpenses",
                       ],
                       [
                         "Operating profit",
@@ -407,6 +434,7 @@ export default function BusinessReport() {
                           ? metrics.operatingProfitCents
                           : "Profit pending review",
                         true,
+                        "operatingProfit",
                       ],
                     ]}
                   />
@@ -430,13 +458,31 @@ export default function BusinessReport() {
                   <article className="report-panel">
                     <h2>Physical cash-out breakdown</h2>
                     <MoneyTable
+                      onOpen={openRecords}
                       rows={[
-                        ["Operating expenses", metrics.operatingCashOutCents],
-                        ["Stock purchases", metrics.stockPurchaseCents],
-                        ["Owner withdrawals", metrics.ownerWithdrawalCents],
+                        [
+                          "Operating expenses",
+                          metrics.operatingCashOutCents,
+                          false,
+                          "operatingCashOut",
+                        ],
+                        [
+                          "Stock purchases",
+                          metrics.stockPurchaseCents,
+                          false,
+                          "stockPurchase",
+                        ],
+                        [
+                          "Owner withdrawals",
+                          metrics.ownerWithdrawalCents,
+                          false,
+                          "ownerWithdrawal",
+                        ],
                         [
                           "Unclassified — needs review",
                           metrics.unclassifiedCents,
+                          false,
+                          "unclassified",
                         ],
                         [
                           "Total cash out",
@@ -444,6 +490,7 @@ export default function BusinessReport() {
                             ? metrics.cashOutCents
                             : "Needs review",
                           true,
+                          "cashOut",
                         ],
                       ]}
                     />
@@ -454,21 +501,35 @@ export default function BusinessReport() {
                   <article className="report-panel">
                     <h2>Recorded drawer movement</h2>
                     <MoneyTable
+                      onOpen={openRecords}
                       rows={[
                         [
                           "Cash portions of customer sales",
                           metrics.cashReady
                             ? metrics.cashSalesCents
                             : "Needs payment review",
+                          false,
+                          "cashSales",
                         ],
-                        ["Manual cash in", metrics.cashInCents],
-                        ["Less: cash out", metrics.cashOutCents],
+                        [
+                          "Manual cash in",
+                          metrics.cashInCents,
+                          false,
+                          "cashIn",
+                        ],
+                        [
+                          "Less: cash out",
+                          metrics.cashOutCents,
+                          false,
+                          "cashOut",
+                        ],
                         [
                           "Recorded drawer movement",
                           metrics.cashReady
                             ? metrics.drawerMovementCents
                             : "Pending cash review",
                           true,
+                          "drawerMovement",
                         ],
                       ]}
                     />
@@ -617,6 +678,9 @@ export default function BusinessReport() {
             />
           )}
         </>
+      )}
+      {records && (
+        <ReportRecordsDialog {...records} onClose={() => setRecords(null)} />
       )}
     </ReportFrame>
   );

@@ -406,9 +406,231 @@ try {
     0,
     "Exact chart values do not require hover",
   );
+  await page
+    .getByRole("button", { name: "View Sales records", exact: true })
+    .click();
+  let sources = page.getByRole("dialog", {
+    name: "Sales — source records",
+    exact: true,
+  });
+  await sources
+    .locator(".report-records-summary strong")
+    .filter({ hasText: "₱12,205.00" })
+    .waitFor();
+  await sources
+    .getByText("125 contributing records · totals include every page", {
+      exact: true,
+    })
+    .waitFor();
+  await sources
+    .getByRole("button", { name: "Next records", exact: true })
+    .click();
+  await sources.getByText("Page 2 of 3", { exact: true }).waitFor();
+  await sources.getByLabel("Search source records").fill(longName);
+  await sources
+    .getByText("123 matching source records", { exact: true })
+    .waitFor();
+  await sources.getByLabel("Search source records").fill("PACK");
+  await sources
+    .getByText("1 matching source records", { exact: true })
+    .waitFor();
+  await sources.getByText("Details for PACK", { exact: true }).click();
+  await sources.getByRole("rowheader", { name: "Box", exact: true }).waitFor();
+  await sources
+    .getByRole("button", { name: "Close records", exact: true })
+    .click();
+  await page.getByRole("button", { name: "7 Days", exact: true }).click();
+  await metric("Sales").filter({ hasText: "12,205.00" }).waitFor();
+  const sharedPeriod = await page.locator(".report-period-label").innerText();
+  await page.getByRole("link", { name: "Transactions", exact: true }).click();
+  await page
+    .getByText("Showing 126 matching records in the full period")
+    .waitFor();
+  assert.equal(
+    await page.locator(".report-period-label").innerText(),
+    sharedPeriod,
+  );
+  assert.equal(
+    await page
+      .getByRole("button", { name: "7 Days", exact: true })
+      .getAttribute("aria-pressed"),
+    "true",
+  );
+  await page
+    .getByRole("button", {
+      name: "View transaction sales records",
+      exact: true,
+    })
+    .click();
+  sources = page.getByRole("dialog", {
+    name: "Sales — source records",
+    exact: true,
+  });
+  await sources
+    .getByText("125 contributing records · totals include every page", {
+      exact: true,
+    })
+    .waitFor();
+  await sources
+    .locator(".report-records-summary strong")
+    .filter({ hasText: "₱12,205.00" })
+    .waitFor();
+  await sources
+    .getByRole("button", { name: "Close records", exact: true })
+    .click();
+  await database.query("update transactions set status='void' where id=1");
+  await page
+    .getByRole("button", {
+      name: "View transaction sales records",
+      exact: true,
+    })
+    .click();
+  sources = page.getByRole("dialog", {
+    name: "Sales — source records",
+    exact: true,
+  });
+  await sources
+    .getByText(/Records have changed since the summary loaded/)
+    .waitFor();
+  await sources
+    .locator(".report-records-summary strong")
+    .filter({ hasText: "₱12,105.00" })
+    .waitFor();
+  const summaryRefresh = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/rpc/report_transactions_v2") &&
+      response.request().postDataJSON()?.p_limit === 50 &&
+      response.status() === 200,
+  );
+  await sources
+    .getByRole("button", { name: "Refresh summary", exact: true })
+    .click();
+  await summaryRefresh;
+  await page
+    .locator(".stat-card")
+    .filter({ hasText: "Full-period sales" })
+    .getByText("₱12,105.00", { exact: true })
+    .waitFor();
+  await database.query("update transactions set status='completed' where id=1");
+  const restoredSummary = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/rpc/report_transactions_v2") &&
+      response.request().postDataJSON()?.p_limit === 50 &&
+      response.status() === 200,
+  );
+  await page
+    .getByRole("button", { name: "Refresh report", exact: true })
+    .click();
+  await restoredSummary;
+  await page
+    .locator(".stat-card")
+    .filter({ hasText: "Full-period sales" })
+    .getByText("₱12,205.00", { exact: true })
+    .waitFor();
+  failReports = true;
+  await page
+    .getByRole("button", {
+      name: "View transaction sales records",
+      exact: true,
+    })
+    .click();
+  sources = page.getByRole("dialog", {
+    name: "Sales — source records",
+    exact: true,
+  });
+  await sources
+    .getByRole("heading", { name: "Report could not be verified", exact: true })
+    .waitFor();
+  assert.equal(await sources.locator(".report-source-record").count(), 0);
+  await sources
+    .getByRole("button", { name: "Close records", exact: true })
+    .click();
+  failReports = false;
+  await page.getByRole("link", { name: "Cash", exact: true }).click();
+  await page.getByRole("heading", { name: /Cash records/ }).waitFor();
+  assert.equal(
+    await page.locator(".report-period-label").innerText(),
+    sharedPeriod,
+  );
+  await page
+    .locator(".report-metrics")
+    .getByRole("button", { name: "View Total cash out records", exact: true })
+    .click();
+  sources = page.getByRole("dialog", {
+    name: "Total cash out — source records",
+    exact: true,
+  });
+  await sources
+    .locator(".report-records-summary strong")
+    .filter({ hasText: "₱350.00" })
+    .waitFor();
+  assert.equal(await sources.locator(".report-source-record").count(), 3);
+  await sources
+    .getByRole("button", { name: "Close records", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Custom", exact: true }).click();
+  const periodEnd = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+  }).format(new Date(now));
+  const periodStart = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+  }).format(new Date(now - 6 * 86400000));
+  await page.getByLabel("From", { exact: true }).fill(periodStart);
+  await page.getByLabel("To", { exact: true }).fill(periodEnd);
+  await page.getByRole("link", { name: "Business", exact: true }).click();
+  await metric("Sales").filter({ hasText: "12,205.00" }).waitFor();
+  assert.equal(
+    await page.getByLabel("From", { exact: true }).inputValue(),
+    periodStart,
+  );
+  assert.equal(
+    await page.getByLabel("To", { exact: true }).inputValue(),
+    periodEnd,
+  );
+  const savedPeriod = await page.evaluate(() =>
+    JSON.parse(sessionStorage.getItem("92parameters-report-period")),
+  );
+  assert.equal(savedPeriod.state.customStart, periodStart);
+  assert.equal(savedPeriod.state.range, "custom");
+  assert.deepEqual(Object.keys(savedPeriod.state).sort(), [
+    "customEnd",
+    "customStart",
+    "lookbackAmount",
+    "lookbackUnit",
+    "range",
+  ]);
+  await page.reload();
+  await page.getByText("Enter your PIN to clock in").waitFor();
+  for (const digit of "2468")
+    await page.getByRole("button", { name: digit, exact: true }).click();
+  await metric("Sales").filter({ hasText: "12,205.00" }).waitFor();
+  assert.equal(
+    await page.getByLabel("From", { exact: true }).inputValue(),
+    periodStart,
+  );
+  await page.getByRole("button", { name: "Today", exact: true }).click();
   await mkdir(".tmp", { recursive: true });
   await page.setViewportSize({ width: 820, height: 1180 });
   await assertTabletLayout();
+  await page
+    .getByRole("button", { name: "View Sales records", exact: true })
+    .tap();
+  sources = page.getByRole("dialog", {
+    name: "Sales — source records",
+    exact: true,
+  });
+  await sources
+    .locator(".report-records-summary strong")
+    .filter({ hasText: "₱12,205.00" })
+    .waitFor();
+  await assertTabletLayout();
+  await page.screenshot({
+    path: ".tmp/reports-tablet-source-records.png",
+    animations: "disabled",
+  });
+  await sources
+    .getByRole("button", { name: "Close records", exact: true })
+    .tap();
   await page.screenshot({
     path: ".tmp/reports-tablet-pending.png",
     animations: "disabled",
@@ -427,6 +649,21 @@ try {
     path: ".tmp/reports-tablet-profit-pending.png",
     animations: "disabled",
   });
+  await page
+    .getByRole("button", { name: "View Operating profit records", exact: true })
+    .click();
+  sources = page.getByRole("dialog", {
+    name: "Operating profit — source records",
+    exact: true,
+  });
+  await sources.getByText(/Profit pending review/).waitFor();
+  assert.equal(
+    await sources.locator(".report-records-summary strong").innerText(),
+    "Needs review",
+  );
+  await sources
+    .getByRole("button", { name: "Close records", exact: true })
+    .click();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("tab", { name: "Data Review", exact: false }).click();
   const milkRow = page
@@ -470,9 +707,8 @@ try {
   await page
     .getByRole("link", { name: /Review 1 unclassified cash-outs/ })
     .click();
-  const monthly = page.getByRole("dialog", {
-    name: "Monthly Cash Movement Report",
-  });
+  const monthly = page.locator(".reports-surface");
+  await monthly.getByRole("heading", { name: /Cash records/ }).waitFor();
   await monthly.locator(".report-record-extra summary").first().click();
   await monthly
     .getByRole("button", { name: "Review category" })
@@ -490,7 +726,6 @@ try {
   await dialog.getByRole("button", { name: "Save category" }).click();
   await dialog.waitFor({ state: "hidden" });
   await monthly.getByText("No cash records match this selection.").waitFor();
-  await monthly.getByRole("button", { name: "Done", exact: true }).click();
   const original = (
     await database.query("select notes,amount from cash_drawer where id=1")
   ).rows[0];
@@ -514,6 +749,28 @@ try {
     await page.getByText("Profit pending review", { exact: true }).count(),
     0,
   );
+  await page
+    .getByRole("button", {
+      name: "View Total operating expenses records",
+      exact: true,
+    })
+    .click();
+  sources = page.getByRole("dialog", {
+    name: "Total operating expenses — source records",
+    exact: true,
+  });
+  await sources
+    .locator(".report-records-summary strong")
+    .filter({ hasText: "₱120.00" })
+    .waitFor();
+  assert.equal(await sources.locator(".report-source-record").count(), 2);
+  await sources
+    .getByText("Milk / Waste Full Cream · Waste cost", { exact: true })
+    .waitFor();
+  await sources.locator('.report-source-record > p').filter({hasText:'Salary November'}).waitFor();
+  await sources
+    .getByRole("button", { name: "Close records", exact: true })
+    .click();
   await page.getByRole("tab", { name: "Sales & Payments" }).click();
   await page.getByLabel("Payment method").selectOption("GCash");
   await page
@@ -653,6 +910,31 @@ try {
       name: "Monthly Cash Movement Report",
     });
     await cashDialog.getByRole("heading", { name: /Cash records/ }).waitFor();
+    await cashDialog
+      .locator(".report-metrics")
+      .getByRole("button", { name: "View Total cash out records", exact: true })
+      .tap();
+    sources = page.getByRole("dialog", {
+      name: "Total cash out — source records",
+      exact: true,
+    });
+    await sources
+      .locator(".report-records-summary strong")
+      .filter({ hasText: "₱350.00" })
+      .waitFor();
+    await assertTabletLayout();
+    await page.screenshot({
+      path: `.tmp/reports-source-monthly-${orientation}.png`,
+      animations: "disabled",
+    });
+    assert.ok(
+      await sources.evaluate(
+        (node) => node.getBoundingClientRect().bottom <= innerHeight + 2,
+      ),
+    );
+    await page.keyboard.press("Escape");
+    await sources.waitFor({ state: "hidden" });
+    assert.ok(await cashDialog.isVisible());
     await assertTabletLayout();
     await page.screenshot({
       path: `.tmp/reports-tablet-monthly-${orientation}.png`,
