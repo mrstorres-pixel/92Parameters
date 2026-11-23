@@ -7,6 +7,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
 import { formatCurrency } from '../utils/formatters';
 import { CATEGORIES } from '../config/categories';
+import ProductReportingModal from '../components/reports/ProductReportingModal';
 
 const empty = { name: '', category: 'Drinks', subCategory: '', price: '', cost: '', isAvailable: true, emoji: '☕' };
 
@@ -15,6 +16,7 @@ export default function ProductManagement() {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
   const [recipeProduct, setRecipeProduct] = useState(null);
+  const [reportProduct, setReportProduct] = useState(null);
   const [form, setForm] = useState(empty);
   const [sortBy, setSortBy] = useState({ field: 'name', direction: 'asc' });
   const [categoryFilter, setCategoryFilter] = useState('All');
@@ -130,6 +132,7 @@ export default function ProductManagement() {
                   <div className="flex gap-8">
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setRecipeProduct(p)} title="Manage Recipe"><LinkIcon size={14} /></button>
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openEdit(p)} title="Edit"><Edit2 size={14} /></button>
+                    {isOwner && <button className="btn btn-ghost btn-sm" onClick={() => setReportProduct(p)}>Reporting</button>}
                     {isOwner && <button className="btn btn-ghost btn-icon btn-sm" onClick={() => remove(p.id)} title="Delete"><Trash2 size={14} /></button>}
                   </div>
                 </td>
@@ -188,6 +191,7 @@ export default function ProductManagement() {
       {recipeProduct && (
         <RecipeModal product={recipeProduct} onClose={() => setRecipeProduct(null)} />
       )}
+      {reportProduct && <ProductReportingModal product={reportProduct} onClose={()=>setReportProduct(null)} onSaved={()=>{setReportProduct(null);load();}} />}
     </div>
   );
 }

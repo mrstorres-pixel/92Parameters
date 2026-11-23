@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { reportProductSnapshot } from '../utils/reportProductSnapshot';
 
 export const usePosStore = create((set, get) => ({
   cart: [],
@@ -22,7 +23,7 @@ export const usePosStore = create((set, get) => ({
     if (existing) {
       set({ cart: cart.map(i => i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i) });
     } else {
-      set({ cart: [...cart, { productId: product.id, name: product.name, category: product.category, subCategory: product.subCategory, price: product.price, cost: product.cost || 0, quantity: 1, discount: 0, markup: 0, customPrice: 0, note: '' }] });
+      set({ cart: [...cart, { productId: product.id, name: product.name, category: product.category, subCategory: product.subCategory, price: product.price, cost: product.cost || 0, ...reportProductSnapshot(product), quantity: 1, discount: 0, markup: 0, customPrice: 0, note: '' }] });
     }
   },
 
