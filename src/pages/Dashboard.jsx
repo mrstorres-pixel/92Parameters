@@ -2,16 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, DollarSign, Clock, TrendingUp, AlertTriangle, ArrowUpRight } from 'lucide-react';
 import db from '../db/database';
+import {useAuthStore} from '../stores/authStore';
+import CashierToday from '../components/reports/CashierToday';
 import { formatCurrency, formatTime } from '../utils/formatters';
 import { calcCartTotal, calcItemTotal } from '../utils/calculations';
 
 export default function Dashboard() {
+  const isCashier=useAuthStore(state=>state.currentStaff?.role==='cashier');
   const navigate = useNavigate();
   const [stats, setStats] = useState({ sales: 0, count: 0, avg: 0 });
   const [recent, setRecent] = useState([]);
   const [lowIngredients, setLowIngredients] = useState([]);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { if(!isCashier)loadData(); }, [isCashier]);
 
   async function loadData() {
     const today = new Date(); today.setHours(0,0,0,0);
@@ -26,6 +29,7 @@ export default function Dashboard() {
     setLowIngredients(ings.filter(i => i.inStock <= (i.lowThreshold || 0)));
   }
 
+  if(isCashier)return <CashierToday/>;
   return (
     <div className="animate-fade">
       <div className="page-header">

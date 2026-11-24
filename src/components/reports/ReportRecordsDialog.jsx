@@ -6,6 +6,7 @@ import { buildReportRecords, reportFigure } from "../../utils/reportRecords";
 import { money } from "../../utils/reporting";
 import { businessDate, reportDateTime } from "../../utils/reportDates";
 import { ReportState } from "./ReportUI";
+import { useAuthStore } from "../../stores/authStore";
 
 const number = (value) =>
   new Intl.NumberFormat("en-PH", { maximumFractionDigits: 6 }).format(value);
@@ -18,6 +19,9 @@ export default function ReportRecordsDialog({
   onClose,
   onRefresh,
 }) {
+  const canSeeCosts = useAuthStore(
+    (state) => state.currentStaff?.role !== "cashier",
+  );
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const state = useReport(
@@ -196,7 +200,7 @@ export default function ReportRecordsDialog({
                               <th>Saved receipt item</th>
                               <th>Quantity</th>
                               <th>Reporting type</th>
-                              <th>Saved line cost</th>
+                              {canSeeCosts && <th>Saved line cost</th>}
                             </tr>
                           </thead>
                           <tbody>
@@ -212,7 +216,9 @@ export default function ReportRecordsDialog({
                                     : number(line.quantity)}
                                 </td>
                                 <td>{line.kind || "Needs review"}</td>
-                                <td>{money(line.costCents)}</td>
+                                {canSeeCosts && (
+                                  <td>{money(line.costCents)}</td>
+                                )}
                               </tr>
                             ))}
                           </tbody>

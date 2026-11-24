@@ -1,8 +1,10 @@
 import React from 'react';
 import { formatCurrency } from '../../utils/formatters';
+import {isRetiredMilkProduct} from '../../utils/posRules';
 
 export default function ProductGrid({ products, category, subCategory, searchQuery, onAdd }) {
   const filtered = products.filter(p => {
+    if(isRetiredMilkProduct(p))return false;
     if (category && category !== 'All' && p.category !== category) return false;
     if (subCategory && subCategory !== 'All' && p.subCategory !== subCategory) return false;
     if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;

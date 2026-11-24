@@ -1,4 +1,6 @@
-export const PAYMENT_METHODS = ['Cash', 'GCash', 'Card', 'Bank Transfer', 'Grab', 'Foodpanda'];
+import {ACTIVE_PAYMENT_METHODS,LEGACY_PAYMENT_METHODS} from './posRules';
+export const PAYMENT_METHODS = ACTIVE_PAYMENT_METHODS;
+export const REPORT_PAYMENT_METHODS = [...ACTIVE_PAYMENT_METHODS,...LEGACY_PAYMENT_METHODS];
 
 export function normalizePaymentLines(transaction) {
   const lines = Array.isArray(transaction?.paymentLines) ? transaction.paymentLines : [];

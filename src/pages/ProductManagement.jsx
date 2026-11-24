@@ -7,6 +7,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
 import { formatCurrency } from '../utils/formatters';
 import {secureBackend} from '../utils/secureApi';
+import {isRetiredMilkProduct} from '../utils/posRules';
 import { CATEGORIES } from '../config/categories';
 import ProductReportingModal from '../components/reports/ProductReportingModal';
 
@@ -36,7 +37,7 @@ export default function ProductManagement() {
     if (!form.name || form.price === '') { toast('Name and price are required', 'error'); return; }
     if (Number(form.price) < 0 || Number(form.cost || 0) < 0) { toast('Price and cost cannot be negative', 'error'); return; }
     try {
-      const data = { ...form, price: Number(form.price), cost: Number(form.cost || 0) };
+      const data = { ...form, price: Number(form.price), cost: Number(form.cost || 0),...(isRetiredMilkProduct(form)?{isAvailable:false}:{}) };
       if (editing === 'new') { await db.products.add(data); toast('Product added'); }
       else { await db.products.update(editing, data); toast('Product updated'); }
       setEditing(null); load();
@@ -128,7 +129,7 @@ export default function ProductManagement() {
                 <td><span className="badge badge-neutral">{p.subCategory || '—'}</span></td>
                 <td>{formatCurrency(p.price)}</td>
                 <td>{formatCurrency(p.cost)}</td>
-                <td><span className={`badge ${p.isAvailable ? 'badge-success' : 'badge-danger'}`}>{p.isAvailable ? 'Available' : 'Unavailable'}</span></td>
+                <td><span className={`badge ${!isRetiredMilkProduct(p)&&p.isAvailable ? 'badge-success' : 'badge-danger'}`}>{isRetiredMilkProduct(p)?'Retired':p.isAvailable ? 'Available' : 'Unavailable'}</span></td>
                 <td>
                   <div className="flex gap-8">
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setRecipeProduct(p)} title="Manage Recipe"><LinkIcon size={14} /></button>
@@ -184,7 +185,7 @@ export default function ProductManagement() {
           <div className="form-group">
             {secureBackend&&<label className="form-label">Preparation routing<select className="form-select" value={form.prepStation || ''} onChange={e=>setForm({...form,prepStation:e.target.value || null})}><option value="">Automatic (Food → kitchen)</option><option value="kitchen">Kitchen</option><option value="none">No kitchen ticket</option></select></label>}
             <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" checked={form.isAvailable} onChange={e => setForm({...form, isAvailable: e.target.checked})} /> Available for sale
+              <input type="checkbox" disabled={isRetiredMilkProduct(form)} checked={!isRetiredMilkProduct(form)&&form.isAvailable} onChange={e => setForm({...form, isAvailable: e.target.checked})} /> {isRetiredMilkProduct(form)?'Retired — historical records preserved':'Available for sale'}
             </label>
           </div>
         </Modal>

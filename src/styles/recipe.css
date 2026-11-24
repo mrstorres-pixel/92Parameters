@@ -1,0 +1,61 @@
+.recipe-editor {
+  font-size: 1rem;
+}
+.recipe-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+  gap: 24px;
+}
+.recipe-panels > section {
+  min-width: 0;
+}
+.recipe-panels h3 {
+  font-size: 1.25rem;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+.recipe-editor th,
+.recipe-editor td {
+  font-size: 1rem;
+  min-height: 52px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.recipe-editor th:first-child,
+.recipe-editor td:first-child {
+  width: 60%;
+}
+.recipe-editor .recipe-quantity {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.recipe-editor .btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+.recipe-add {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(70px, 1fr) 48px;
+  gap: 8px;
+  align-items: end;
+  margin-top: 16px;
+}
+.recipe-add label {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  font-size: 1rem;
+}
+.recipe-add :is(select, input, button) {
+  font-size: 1rem;
+  min-height: 48px;
+}
+.recipe-add button {
+  padding: 8px;
+}
+.recipe-add svg {
+  flex-shrink: 0;
+}
+.recipe-editor th {
+  color: #c8b99c;
+}
