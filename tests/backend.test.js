@@ -100,7 +100,18 @@ test("real API sessions, private photos, expiry, and permissions through isolate
     });
     assert.equal(attendance.status, 200, JSON.stringify(attendance.data));
     assert.ok(Number(attendance.data[0].timeIn) > Date.now() - 10000);
-    assert.equal(Number(attendance.data[0].salaryEarned), 0);
+    assert.equal(attendance.data[0].salaryEarned, undefined);
+    assert.equal(
+      Number(
+        (
+          await db.query(
+            'select "salaryEarned" from time_records where id=$1',
+            [attendance.data[0].id],
+          )
+        ).rows[0].salaryEarned,
+      ),
+      0,
+    );
     assert.equal(
       (
         await request("data/time_records", {
@@ -123,7 +134,7 @@ test("real API sessions, private photos, expiry, and permissions through isolate
       body: { pin: "1357", staffId: 2 },
     });
     const clockOut = await request(
-      `data/time_records?id=eq.${recordId}&timeOut=is.null&select=id,salaryEarned`,
+      `data/time_records?id=eq.${recordId}&timeOut=is.null&select=id`,
       {
         method: "PATCH",
         cookie: cashier,
@@ -132,7 +143,19 @@ test("real API sessions, private photos, expiry, and permissions through isolate
       },
     );
     assert.equal(clockOut.status, 200, JSON.stringify(clockOut.data));
-    assert.ok(Math.abs(Number(clockOut.data[0].salaryEarned) - 100) < 0.1);
+    assert.equal(clockOut.data[0].salaryEarned, undefined);
+    assert.ok(
+      Math.abs(
+        Number(
+          (
+            await db.query(
+              'select "salaryEarned" from time_records where id=$1',
+              [recordId],
+            )
+          ).rows[0].salaryEarned,
+        ) - 100,
+      ) < 0.1,
+    );
     result = await request("session", {
       method: "POST",
       body: { pin: "9753" },

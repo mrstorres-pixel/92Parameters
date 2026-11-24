@@ -62,12 +62,54 @@ try {
       viewport: { width: 820, height: 1180 },
       hasTouch: true,
     });
-    await context.route("**/*", (route) =>
-      new URL(route.request().url()).origin === origin
-        ? route.continue()
-        : route.abort(),
-    );
+    await context.route("**/*", (route) => {
+      const url = new URL(route.request().url());
+      if (url.origin === origin) return route.continue();
+      if (
+        url.hostname === "fixture.supabase.co" &&
+        url.pathname.startsWith("/storage/v1/object/sign/")
+      ) {
+        const key = decodeURIComponent(url.pathname.split("/object/sign/")[1]);
+        const body = fixture.objects.get(key);
+        return body
+          ? route.fulfill({ status: 200, contentType: "image/jpeg", body })
+          : route.abort();
+      }
+      return route.abort();
+    });
     await context.addInitScript(() => {
+      window.chimeNotes = 0;
+      window.AudioContext = class {
+        state = "running";
+        currentTime = 0;
+        destination = {};
+        async resume() {
+          this.state = "running";
+        }
+        async close() {
+          this.state = "closed";
+        }
+        createOscillator() {
+          return {
+            frequency: { value: 0 },
+            connect() {},
+            start() {
+              window.chimeNotes++;
+            },
+            stop() {},
+          };
+        }
+        createGain() {
+          return {
+            gain: {
+              setValueAtTime() {},
+              linearRampToValueAtTime() {},
+              exponentialRampToValueAtTime() {},
+            },
+            connect() {},
+          };
+        }
+      };
       const getUserMedia = async () => {
         if (window.denyCamera)
           throw new DOMException("Denied", "NotAllowedError");
@@ -163,6 +205,15 @@ try {
     403,
   );
   const foodName = "Food with a long preparation note";
+  await kitchen
+    .getByRole("status")
+    .filter({ hasText: /^Connected/ })
+    .waitFor();
+  assert.equal(await kitchen.evaluate(() => window.chimeNotes), 0);
+  await kitchen
+    .getByRole("button", { name: "Enable sound", exact: true })
+    .click();
+  assert.equal(await kitchen.evaluate(() => window.chimeNotes), 2);
   await counter.locator(".product-card").filter({ hasText: foodName }).click();
   await counter.locator(".product-card").filter({ hasText: "Coffee" }).click();
   await counter
@@ -177,6 +228,10 @@ try {
   await kitchen
     .getByRole("heading", { name: "Table 7", exact: true })
     .waitFor();
+  assert.equal(await kitchen.evaluate(() => window.chimeNotes), 4);
+  await kitchen
+    .getByRole("button", { name: "Refresh tickets", exact: true })
+    .click();
   assert.equal(
     await kitchen.getByText("1 × Coffee", { exact: true }).count(),
     0,
@@ -193,6 +248,10 @@ try {
   );
   await counter.getByRole("button", { name: /Charge ₱250/ }).click();
   const payment = counter.getByRole("dialog", { name: "Payment", exact: true });
+  assert.equal(
+    await payment.getByRole("button", { name: /^(GCash|Foodpanda)$/ }).count(),
+    0,
+  );
   await payment.getByRole("button", { name: "Card", exact: true }).click();
   assert.ok(
     await payment
@@ -299,6 +358,25 @@ try {
   );
   await confirm.click();
   await payment.waitFor({ state: "hidden" });
+  await counter.locator(".proof-thumbnail img").waitFor();
+  await counter.waitForFunction(
+    () => document.querySelector(".proof-thumbnail img")?.naturalWidth > 0,
+  );
+  assert.equal(
+    await counter
+      .getByRole("button", { name: "View Card photo", exact: true })
+      .count(),
+    1,
+  );
+  await counter
+    .getByRole("button", { name: "Enlarge payment photo", exact: true })
+    .click();
+  await counter
+    .getByRole("dialog", { name: "Bank Transfer payment photo", exact: true })
+    .waitFor();
+  await counter
+    .getByRole("button", { name: "Close photo", exact: true })
+    .click();
   assert.equal(
     (await db.query("select count(*) as n from transactions")).rows[0].n,
     1,
@@ -343,8 +421,19 @@ try {
       .isDisabled(),
   );
   await kitchen.context().setOffline(false);
-  await kitchen.getByRole("status").filter({ hasText: /^Connected · live updates/ }).waitFor();
-  assert.ok(await kitchen.getByRole('button',{name:'Reopen ticket',exact:true}).isEnabled());
+  await kitchen
+    .getByRole("status")
+    .filter({ hasText: /^Connected · live updates/ })
+    .waitFor();
+  assert.ok(
+    await kitchen
+      .getByRole("button", { name: "Reopen ticket", exact: true })
+      .isEnabled(),
+  );
+  assert.equal(await kitchen.evaluate(() => window.chimeNotes), 4);
+  await kitchen
+    .getByRole("button", { name: "Mute sound", exact: true })
+    .click();
   const business = await counter.evaluate(async () => {
     const response = await fetch("/api/data/rpc/report_business_v2", {
       method: "POST",
@@ -403,6 +492,105 @@ try {
     (await db.query("select count(*) n from transactions")).rows[0].n,
     1,
   );
+  assert.equal(await kitchen.evaluate(() => window.chimeNotes), 4);
+  await db.query(
+    `insert into products(id,name,category,price,cost,"isAvailable") values(12,'Milk / Waste Full Cream','Drinks',0,10,true)`,
+  );
+  const cashier = await tablet("1357");
+  await cashier
+    .locator(".product-card")
+    .filter({ hasText: foodName })
+    .waitFor();
+  assert.equal(
+    await cashier
+      .locator(".product-card")
+      .filter({ hasText: "Milk / Waste" })
+      .count(),
+    0,
+  );
+  async function navigate(page, name) {
+    const menu = page.locator(".header .menu-toggle");
+    if (await menu.isVisible()) await menu.click();
+    await page.getByRole("link", { name, exact: true }).click();
+  }
+  await navigate(cashier, "Transaction");
+  await cashier.getByText("Today only", { exact: true }).waitFor();
+  await cashier.getByText("Cash sales today", { exact: true }).waitFor();
+  assert.equal(
+    await cashier.getByRole("button", { name: "30 Days", exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await cashier.getByText("Payment Totals", { exact: true }).count(),
+    0,
+  );
+  await cashier
+    .getByRole("button", { name: /^Details for / })
+    .first()
+    .click();
+  assert.equal(
+    await cashier
+      .getByRole("heading", { name: "Payment photos", exact: true })
+      .count(),
+    0,
+  );
+  assert.equal(
+    await cashier.getByText("Historical line cost", { exact: true }).count(),
+    0,
+  );
+  await cashier
+    .getByRole("button", { name: "Close dialog", exact: true })
+    .click();
+  await navigate(cashier, "Cash Drawer");
+  await cashier
+    .getByText("Recorded drawer movement", { exact: true })
+    .waitFor();
+  assert.equal(
+    await cashier
+      .getByRole("button", { name: "Monthly Reports", exact: true })
+      .count(),
+    0,
+  );
+  await navigate(counter, "Products");
+  await counter
+    .getByRole("row")
+    .filter({ hasText: foodName })
+    .getByTitle("Manage Recipe")
+    .click();
+  await counter
+    .getByRole("dialog", { name: `Recipe: ${foodName}`, exact: true })
+    .waitFor();
+  await counter
+    .getByRole("cell", { name: "Ingredient", exact: true })
+    .waitFor();
+  await counter.getByRole("cell", { name: "10 g", exact: true }).waitFor();
+  await counter.getByRole("cell", { name: "Box", exact: true }).waitFor();
+  for (const viewport of [
+    { width: 820, height: 1180 },
+    { width: 1180, height: 820 },
+  ]) {
+    await counter.setViewportSize(viewport);
+    await cashier.setViewportSize(viewport);
+    assert.ok(
+      await cashier.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 2,
+      ),
+    );
+    assert.ok(
+      await counter
+        .locator(".recipe-editor")
+        .evaluate((node) => node.scrollWidth <= node.clientWidth + 2),
+    );
+    await counter.screenshot({
+      path: `.tmp/recipe-${viewport.width}.png`,
+      animations: "disabled",
+    });
+    await cashier.screenshot({
+      path: `.tmp/cashier-cash-${viewport.width}.png`,
+      animations: "disabled",
+    });
+  }
+  assert.deepEqual(errors, []);
   console.log(
     "PASS: two real API sessions, kitchen isolation, fresh camera requirement, private upload, atomic checkout, no duplicate food, and kitchen completion.",
   );

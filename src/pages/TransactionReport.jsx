@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Search, Ban, Trash2, Eye, Receipt, Download } from "lucide-react";
 import db from "../db/database";
 import Modal from "../components/common/Modal";
 import ReceiptModal from "../components/pos/ReceiptModal";
 import PaymentProofViewer from "../components/pos/PaymentProofViewer";
-import {api,secureBackend} from '../utils/secureApi';
+import { api, secureBackend } from "../utils/secureApi";
+import useCashierDay from "../hooks/useCashierDay";
+import {
+  CashierCashTotals,
+  TodayPeriod,
+} from "../components/reports/CashierToday";
 import { useToast } from "../components/common/Toast";
 import { useAuthStore } from "../stores/authStore";
 import { formatCurrency } from "../utils/formatters";
@@ -16,7 +21,7 @@ import {
   reverseDailySalesSummary,
 } from "../utils/durability";
 import { adjustIngredientStock } from "../utils/stockAdjustments";
-import { formatPaymentLabel, PAYMENT_METHODS } from "../utils/payments";
+import { formatPaymentLabel, REPORT_PAYMENT_METHODS } from "../utils/payments";
 import { reverseLoyaltyForTransaction } from "../utils/loyalty";
 import useReport from "../hooks/useReport";
 import { reportRange, reportDateTime } from "../utils/reportDates";
@@ -44,6 +49,7 @@ function formatUnitPrice(item) {
 export default function TransactionReport() {
   const [reload, setReload] = useState(0);
   const [exportBusy, setExportBusy] = useState(false);
+  const exportRequest = useRef(null);
   const [staff, setStaff] = useState([]);
   const [search, setSearch] = useState("");
   const {
@@ -71,6 +77,17 @@ export default function TransactionReport() {
   const [voidError, setVoidError] = useState("");
   const currentStaff = useAuthStore((s) => s.currentStaff);
   const isOwner = currentStaff?.role === "owner";
+  const isCashier = currentStaff?.role === "cashier";
+  const cashierDay = useCashierDay(isCashier);
+  useEffect(() => {
+    if (isCashier) {
+      setSelected(null);
+      setShowReceipt(null);
+      setRecords(null);
+      setShowVoid(null);
+      setPage(0);
+    }
+  }, [isCashier, cashierDay.bounds?.startMs]);
   const toast = useToast();
 
   useEffect(() => {
@@ -91,16 +108,19 @@ export default function TransactionReport() {
   ]);
   let bounds, rangeError;
   try {
-    bounds = reportRange({
-      range,
-      customStart,
-      customEnd,
-      lookbackAmount,
-      lookbackUnit,
-    });
+    bounds = isCashier
+      ? cashierDay.bounds
+      : reportRange({
+          range,
+          customStart,
+          customEnd,
+          lookbackAmount,
+          lookbackUnit,
+        });
   } catch (error) {
     rangeError = error.message;
   }
+  if (isCashier) rangeError = cashierDay.error;
   const params = {
     ...(bounds ? periodParams(bounds) : {}),
     p_search: search.trim(),
@@ -116,6 +136,13 @@ export default function TransactionReport() {
     reload,
     Boolean(bounds),
   );
+  const queryKey = JSON.stringify(params);
+  useEffect(
+    () => () => {
+      exportRequest.current?.abort();
+    },
+    [queryKey, isCashier],
+  );
   const report = state.data;
   const txns = report?.transactions || [];
   const openRecords = (figure) =>
@@ -125,10 +152,23 @@ export default function TransactionReport() {
       payment: paymentFilter,
       request: {
         name: "report_transactions_v2",
-        params: { ...params, p_offset: 0, p_limit: 0 },
+        params: {
+          ...params,
+          ...(isCashier
+            ? {
+                p_search: "",
+                p_payment: "All",
+                p_status: "All",
+                p_staff: "All",
+              }
+            : {}),
+          p_offset: 0,
+          p_limit: 0,
+        },
       },
     });
   function load() {
+    if (isCashier) cashierDay.refresh();
     setReload((value) => value + 1);
   }
 
@@ -174,7 +214,24 @@ export default function TransactionReport() {
 
   async function handleVoid() {
     try {
-      if(secureBackend){await api('transactions/reverse',{method:'POST',body:{id:showVoid.id,pin:managerPin,reason:voidReason,delete:false}});toast('Transaction voided');setShowVoid(null);setSelected(null);setVoidReason('');setManagerPin('');load();return;}
+      if (secureBackend) {
+        await api("transactions/reverse", {
+          method: "POST",
+          body: {
+            id: showVoid.id,
+            pin: managerPin,
+            reason: voidReason,
+            delete: false,
+          },
+        });
+        toast("Transaction voided");
+        setShowVoid(null);
+        setSelected(null);
+        setVoidReason("");
+        setManagerPin("");
+        load();
+        return;
+      }
       const manager = await db.staff.where("pin").equals(managerPin).first();
       if (
         !manager ||
@@ -222,7 +279,20 @@ export default function TransactionReport() {
     )
       return;
     try {
-      if(secureBackend){await api('transactions/reverse',{method:'POST',body:{id:txn.id,reason:'Owner deleted transaction',delete:true}});toast('Transaction deleted','info');setSelected(null);load();return;}
+      if (secureBackend) {
+        await api("transactions/reverse", {
+          method: "POST",
+          body: {
+            id: txn.id,
+            reason: "Owner deleted transaction",
+            delete: true,
+          },
+        });
+        toast("Transaction deleted", "info");
+        setSelected(null);
+        load();
+        return;
+      }
       if (txn.status !== "void") {
         await reverseDailySalesSummary(txn);
         await reverseLoyaltyForTransaction(
@@ -270,25 +340,28 @@ export default function TransactionReport() {
       { amountCents: row.amountCents },
     ]),
   );
-  const paymentOptions = ["All", ...PAYMENT_METHODS];
+  const paymentOptions = ["All", ...REPORT_PAYMENT_METHODS];
   async function exportFiltered() {
     if (exportBusy || !bounds) return;
+    const controller = new AbortController();
+    exportRequest.current = controller;
     setExportBusy(true);
     try {
       const complete = await requestReport(
         "report_transactions_v2",
         { ...params, p_offset: 0, p_limit: 0 },
-        new AbortController().signal,
+        controller.signal,
       );
+      if (controller.signal.aborted) return;
       downloadJson(`transactions-${Date.now()}.json`, {
         generatedAt: complete.generatedAt,
         timezone: complete.timezone,
         startMs: complete.startMs,
         endExclusiveMs: complete.endExclusiveMs,
         filters: {
-          range,
-          customStart,
-          customEnd,
+          range: isCashier ? "today" : range,
+          customStart: isCashier ? bounds.startDate : customStart,
+          customEnd: isCashier ? bounds.endDate : customEnd,
           paymentFilter,
           statusFilter,
           staffFilter,
@@ -299,7 +372,7 @@ export default function TransactionReport() {
         transactions: complete.transactions,
       });
     } catch (error) {
-      toast(error.message, "error");
+      if (!controller.signal.aborted) toast(error.message, "error");
     } finally {
       setExportBusy(false);
     }
@@ -311,22 +384,26 @@ export default function TransactionReport() {
       generatedAt={report?.generatedAt}
       onRefresh={load}
       period={
-        <ReportPeriod
-          {...{
-            range,
-            customStart,
-            customEnd,
-            lookbackAmount,
-            lookbackUnit,
-            bounds,
-          }}
-          onRange={setRange}
-          onStart={setCustomStart}
-          onEnd={setCustomEnd}
-          onAmount={setLookbackAmount}
-          onUnit={setLookbackUnit}
-          error={rangeError}
-        />
+        isCashier ? (
+          <TodayPeriod bounds={bounds} />
+        ) : (
+          <ReportPeriod
+            {...{
+              range,
+              customStart,
+              customEnd,
+              lookbackAmount,
+              lookbackUnit,
+              bounds,
+            }}
+            onRange={setRange}
+            onStart={setCustomStart}
+            onEnd={setCustomEnd}
+            onAmount={setLookbackAmount}
+            onUnit={setLookbackUnit}
+            error={rangeError}
+          />
+        )
       }
       actions={
         <button
@@ -413,68 +490,83 @@ export default function TransactionReport() {
       {!rangeError && <ReportState state={state} />}
       {report && !rangeError && (
         <>
-          <div className="stat-grid">
-            <div className="stat-card">
-              <div className="stat-label">
-                {paymentFilter === "All"
-                  ? "Full-period sales"
-                  : "Full value of matching receipts"}
+          {isCashier ? (
+            <>
+              <CashierCashTotals data={report} />
+              <p className="report-help">
+                {report.totals.transactionCount} customer transactions today.
+                Totals cover all of today; filters change the receipt list.
+              </p>
+            </>
+          ) : (
+            <div className="stat-grid">
+              <div className="stat-card">
+                <div className="stat-label">
+                  {paymentFilter === "All"
+                    ? "Full-period sales"
+                    : "Full value of matching receipts"}
+                </div>
+                <button
+                  className="report-figure-button"
+                  aria-label="View transaction sales records"
+                  onClick={() => openRecords("sales")}
+                >
+                  <div className="stat-value">
+                    {report.totals.salesReady
+                      ? money(totalSales)
+                      : "Needs review"}
+                  </div>
+                  <span className="report-figure-hint">View records ↗</span>
+                </button>
               </div>
-              <button
-                className="report-figure-button"
-                aria-label="View transaction sales records"
-                onClick={() => openRecords("sales")}
-              >
-                <div className="stat-value">
-                  {report.totals.salesReady
-                    ? money(totalSales)
-                    : "Needs review"}
-                </div>
-                <span className="report-figure-hint">View records ↗</span>
-              </button>
+              <div className="stat-card">
+                <div className="stat-label">Customer transactions</div>
+                <button
+                  className="report-figure-button"
+                  aria-label="View customer transaction records"
+                  onClick={() => openRecords("transactions")}
+                >
+                  <div className="stat-value">
+                    {report.totals.transactionCount}
+                  </div>
+                  <span className="report-figure-hint">View records ↗</span>
+                </button>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Voids</div>
+                <button
+                  className="report-figure-button"
+                  aria-label="View void records"
+                  onClick={() => openRecords("voids")}
+                >
+                  <div
+                    className="stat-value"
+                    style={{ color: "var(--danger)" }}
+                  >
+                    {report.totals.voidCount}
+                  </div>
+                  <span className="report-figure-hint">View records ↗</span>
+                </button>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Average Customer Sale</div>
+                <button
+                  className="report-figure-button"
+                  aria-label="View average customer sale records"
+                  onClick={() => openRecords("average")}
+                >
+                  <div className="stat-value">
+                    {report.totals.salesReady
+                      ? money(avgTicket)
+                      : "Needs review"}
+                  </div>
+                  <span className="report-figure-hint">View records ↗</span>
+                </button>
+              </div>
             </div>
-            <div className="stat-card">
-              <div className="stat-label">Customer transactions</div>
-              <button
-                className="report-figure-button"
-                aria-label="View customer transaction records"
-                onClick={() => openRecords("transactions")}
-              >
-                <div className="stat-value">
-                  {report.totals.transactionCount}
-                </div>
-                <span className="report-figure-hint">View records ↗</span>
-              </button>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Voids</div>
-              <button
-                className="report-figure-button"
-                aria-label="View void records"
-                onClick={() => openRecords("voids")}
-              >
-                <div className="stat-value" style={{ color: "var(--danger)" }}>
-                  {report.totals.voidCount}
-                </div>
-                <span className="report-figure-hint">View records ↗</span>
-              </button>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Average Customer Sale</div>
-              <button
-                className="report-figure-button"
-                aria-label="View average customer sale records"
-                onClick={() => openRecords("average")}
-              >
-                <div className="stat-value">
-                  {report.totals.salesReady ? money(avgTicket) : "Needs review"}
-                </div>
-                <span className="report-figure-hint">View records ↗</span>
-              </button>
-            </div>
-          </div>
+          )}
 
-          {paymentFilter !== "All" && (
+          {!isCashier && paymentFilter !== "All" && (
             <div className="report-notice">
               <button
                 className="report-amount-button"
@@ -493,29 +585,33 @@ export default function TransactionReport() {
             </div>
           )}
           <p className="report-help">
-            Summaries cover all matching records, not just this page. Waste-only
-            entries are excluded from customer counts; free customer sales are
-            included.
+            {isCashier
+              ? "Cash summaries cover all of today; filters change the receipt list."
+              : "Summaries cover all matching records, not just this page."}{" "}
+            Waste-only entries are excluded from customer counts; free customer
+            sales are included.
           </p>
-          <div className="card report-table-card mb-16">
-            <div className="card-title mb-16">Payment Totals</div>
-            <div className="payment-total-grid">
-              {Object.entries(paymentTotals).length === 0 ? (
-                <span className="text-muted text-sm">
-                  No completed sales in this view.
-                </span>
-              ) : (
-                Object.entries(paymentTotals)
-                  .sort((a, b) => b[1].amountCents - a[1].amountCents)
-                  .map(([method, totals]) => (
-                    <div key={method} className="payment-total-item">
-                      <span>{method}</span>
-                      <strong>{money(totals.amountCents)}</strong>
-                    </div>
-                  ))
-              )}
+          {!isCashier && (
+            <div className="card report-table-card mb-16">
+              <div className="card-title mb-16">Payment Totals</div>
+              <div className="payment-total-grid">
+                {Object.entries(paymentTotals).length === 0 ? (
+                  <span className="text-muted text-sm">
+                    No completed sales in this view.
+                  </span>
+                ) : (
+                  Object.entries(paymentTotals)
+                    .sort((a, b) => b[1].amountCents - a[1].amountCents)
+                    .map(([method, totals]) => (
+                      <div key={method} className="payment-total-item">
+                        <span>{method}</span>
+                        <strong>{money(totals.amountCents)}</strong>
+                      </div>
+                    ))
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="table-container">
             <table className="data-table report-record-table">
@@ -753,7 +849,13 @@ export default function TransactionReport() {
             </div>
           </div>
 
-          {secureBackend&&['owner','manager'].includes(currentStaff?.role)&&<PaymentProofViewer transactionId={selected.id} isOwner={isOwner}/>}
+          {secureBackend &&
+            ["owner", "manager"].includes(currentStaff?.role) && (
+              <PaymentProofViewer
+                transactionId={selected.id}
+                isOwner={isOwner}
+              />
+            )}
           {selected.customerName && (
             <div className="table-container" style={{ marginBottom: 16 }}>
               <table className="data-table">
@@ -797,7 +899,7 @@ export default function TransactionReport() {
             </div>
           )}
 
-          {selected.report && (
+          {!isCashier && selected.report && (
             <article className="report-panel">
               <h4>Reporting reconciliation</h4>
               <p className="report-help">

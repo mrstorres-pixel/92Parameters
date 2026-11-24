@@ -3,8 +3,11 @@ import { api } from "../utils/secureApi";
 import { reportDateTime } from "../utils/reportDates";
 import "../styles/reports.css";
 import "../styles/kitchen.css";
+import useKitchenSound from "../hooks/useKitchenSound";
 
-export function useKitchenFeed() {
+export function useKitchenFeed(onTickets) {
+  const notify = useRef(onTickets);
+  notify.current = onTickets;
   const [tickets, setTickets] = useState([]),
     [status, setStatus] = useState("connecting"),
     [lastSync, setLastSync] = useState(null),
@@ -25,6 +28,7 @@ export function useKitchenFeed() {
         { signal: request.current.signal },
       );
       if (!alive.current) return;
+      notify.current?.(data.tickets);
       if (full) lastFull.current = Date.now();
       setTickets((previous) => {
         const map = new Map(
@@ -88,7 +92,8 @@ export function useKitchenFeed() {
   return { tickets, status, lastSync, error, refresh, acceptTicket };
 }
 export default function Kitchen() {
-  const feed = useKitchenFeed(),
+  const sound = useKitchenSound();
+  const feed = useKitchenFeed(sound.receive),
     [view, setView] = useState("active"),
     [saving, setSaving] = useState(null),
     [error, setError] = useState("");
@@ -135,13 +140,36 @@ export default function Kitchen() {
             {feed.lastSync && ` · Last sync ${reportDateTime(feed.lastSync)}`}
           </p>
         </div>
-        <button
-          className="btn btn-secondary"
-          onClick={() => feed.refresh(true)}
-        >
-          Refresh tickets
-        </button>
+        <div className="report-actions">
+          <button
+            className="btn btn-secondary"
+            onClick={sound.status === "on" ? sound.mute : sound.enable}
+          >
+            {sound.status === "on" ? "Mute sound" : "Enable sound"}
+          </button>
+          <button
+            className="btn btn-secondary"
+            disabled={sound.status !== "on"}
+            onClick={sound.test}
+          >
+            Test sound
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => feed.refresh(true)}
+          >
+            Refresh tickets
+          </button>
+        </div>
       </header>
+      <p role="status">
+        {sound.error ||
+          (sound.status === "on"
+            ? "Sound on — new tickets will chime."
+            : sound.status === "paused"
+              ? "Sound paused — tap Enable sound to resume."
+              : "Sound off — tap Enable sound on this tablet.")}
+      </p>
       {(feed.error || error) && (
         <p role="alert" className="report-notice report-notice-warning">
           {error || feed.error} Changes are saved only after confirmation from

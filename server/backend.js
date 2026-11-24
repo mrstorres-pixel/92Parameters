@@ -2,6 +2,17 @@ import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import {
+  ACTIVE_PAYMENT_METHODS,
+  isRetiredMilkProduct,
+} from "../src/utils/posRules.js";
+import {
+  cashierBounds,
+  cashierSafe,
+  cashierReport,
+  enforceCashierPeriod,
+  scopeCashierQuery,
+} from "./cashierPolicy.js";
+import {
   COUNTER,
   KITCHEN,
   digest,
@@ -114,7 +125,11 @@ function send(res, status, data) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Cache-Control", "no-store");
-  res.end(JSON.stringify(data));
+  res.end(
+    JSON.stringify(
+      res.cafeActor?.role === "cashier" ? cashierSafe(data) : data,
+    ),
+  );
 }
 export function validateCheckout(body) {
   if (
@@ -128,9 +143,7 @@ export function validateCheckout(body) {
   const methods = new Set();
   for (const line of body.paymentLines) {
     if (
-      !["Cash", "GCash", "Card", "Bank Transfer", "Grab", "Foodpanda"].includes(
-        line.method,
-      ) ||
+      !ACTIVE_PAYMENT_METHODS.includes(line.method) ||
       methods.has(line.method) ||
       !Number.isFinite(line.amount) ||
       line.amount < 0
@@ -172,6 +185,7 @@ export function createHandler({
   adminFactory = getAdmin,
   secret = () => process.env.SESSION_PEPPER,
   fetcher = fetch,
+  clock = () => Date.now(),
 } = {}) {
   return async function handler(req, res) {
     try {
@@ -273,6 +287,7 @@ export function createHandler({
         if (!actor || actor.role === "staff")
           fail(401, "Invalid PIN or time-tracking-only profile.");
         const token = newToken();
+        res.cafeActor = actor;
         unwrap(
           await admin.from("app_sessions").insert({
             token_hash: digest(token),
@@ -358,6 +373,29 @@ export function createHandler({
         return send(res, 200, { ok: true });
       }
       const actor = await actorFor(admin, req);
+      res.cafeActor = actor;
+      const requestNow = clock();
+      const today = actor.role === "cashier" ? cashierBounds(requestNow) : null;
+      if (path === "report-access" && req.method === "GET") {
+        requireRole(actor, COUNTER);
+        return send(res, 200, {
+          dateScope: today ? "today" : "full",
+          bounds: today,
+          serverNow: requestNow,
+        });
+      }
+      const rejectRetiredItems = async (items) => {
+        const ids = [...new Set((items || []).map((item) => item.productId))];
+        if (!ids.length) return;
+        const products = unwrap(
+          await admin.from("products").select("id,name").in("id", ids),
+        );
+        if (products.some(isRetiredMilkProduct))
+          fail(
+            400,
+            "Milk / Waste is retired. Remove it from the order before continuing.",
+          );
+      };
       if (path === "session") {
         if (req.method === "DELETE") {
           unwrap(
@@ -512,6 +550,7 @@ export function createHandler({
       if (path === "checkout") {
         requireRole(actor, COUNTER);
         validateCheckout(body);
+        await rejectRetiredItems(body.items);
         const payload = {
           ...body,
           receiptNo: `92P-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`,
@@ -536,6 +575,20 @@ export function createHandler({
       }
       if (path === "transactions/reverse") {
         requireRole(actor, COUNTER);
+        if (today) {
+          const tx = unwrap(
+            await admin
+              .from("transactions")
+              .select("datetime")
+              .eq("id", body.id)
+              .single(),
+          );
+          if (
+            tx.datetime < today.startMs ||
+            tx.datetime >= today.endExclusiveMs
+          )
+            fail(403, "Cashiers can act on today’s transactions only.");
+        }
         const authorizer = body.delete ? actor : await checkedPin(body.pin);
         requireRole(authorizer, body.delete ? ["owner"] : ["owner", "manager"]);
         unwrap(
@@ -562,6 +615,7 @@ export function createHandler({
       }
       if (path === "orders/dispatch") {
         requireRole(actor, COUNTER);
+        await rejectRetiredItems(body.order?.items);
         return send(
           res,
           200,
@@ -578,6 +632,7 @@ export function createHandler({
       }
       if (path === "bills/save") {
         requireRole(actor, COUNTER);
+        await rejectRetiredItems(body.items);
         return send(
           res,
           200,
@@ -652,6 +707,34 @@ export function createHandler({
       if (path.startsWith("data/")) {
         const resource = path.slice(5);
         authorizeData(actor, resource, req.method);
+        if (actor.role === "cashier") {
+          if (["GET", "HEAD"].includes(req.method))
+            scopeCashierQuery(resource, url.searchParams, today);
+          if (
+            ["rpc/report_transactions_v2", "rpc/report_cash_v2"].includes(
+              resource,
+            )
+          ) {
+            enforceCashierPeriod(body, today);
+            const snapshot = unwrap(
+              await admin.rpc("report_business_v2", {
+                p_start_ms: today.startMs,
+                p_end_exclusive_ms: today.endExclusiveMs,
+              }),
+            );
+            if (cashierBounds(clock()).startMs !== today.startMs)
+              fail(409, "The business day changed. Refresh today’s records.");
+            return send(
+              res,
+              200,
+              cashierReport(snapshot, {
+                ...body,
+                kind:
+                  resource === "rpc/report_cash_v2" ? "cash" : "transactions",
+              }),
+            );
+          }
+        }
         if (
           resource === "staff" &&
           req.method === "POST" &&
@@ -802,6 +885,17 @@ export function createHandler({
               delete clean.auth_version;
               delete clean.pin_hash;
               delete clean.pin_lookup;
+              if (resource === "cash_drawer" && actor.role === "cashier") {
+                if (
+                  !["in", "out"].includes(clean.type) ||
+                  !Number.isFinite(clean.amount) ||
+                  clean.amount <= 0
+                )
+                  fail(400, "Enter a valid cash movement.");
+                clean.datetime = clock();
+                clean.staffId = actor.id;
+                clean.staffName = actor.name;
+              }
               if (resource === "staff") {
                 if (req.method === "POST" && !clean.pin)
                   fail(400, "A four-digit staff PIN is required.");
@@ -839,6 +933,29 @@ export function createHandler({
                   )
                     clean.auth_version = ids[0].auth_version + 1;
                 }
+              }
+              if (resource === "products") {
+                let previous = null;
+                if (req.method === "PATCH" && clean.isAvailable === true) {
+                  const productId = url.searchParams.get("id");
+                  if (!/^eq\.\d+$/.test(productId || ""))
+                    fail(
+                      400,
+                      "Select one product by ID to change availability.",
+                    );
+                  previous = unwrap(
+                    await admin
+                      .from("products")
+                      .select("id,name")
+                      .eq("id", productId.slice(3))
+                      .single(),
+                  );
+                }
+                if (
+                  isRetiredMilkProduct(clean) ||
+                  isRetiredMilkProduct(previous)
+                )
+                  clean.isAvailable = false;
               }
               if (resource === "time_records") {
                 if (attendanceTarget) {
@@ -892,6 +1009,11 @@ export function createHandler({
             apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
             Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
             "Content-Type": "application/json",
+            Accept: req.headers.accept?.includes(
+              "application/vnd.pgrst.object+json",
+            )
+              ? "application/vnd.pgrst.object+json"
+              : "application/json",
             Prefer: req.headers.prefer || "return=representation",
             Range: req.headers.range || "",
             ...actorHeaders(actor),
@@ -900,6 +1022,13 @@ export function createHandler({
             ? undefined
             : JSON.stringify(mutation),
         });
+        if (
+          today &&
+          ["transactions", "cash_drawer"].includes(resource) &&
+          ["GET", "HEAD"].includes(req.method) &&
+          cashierBounds(clock()).startMs !== today.startMs
+        )
+          fail(409, "The business day changed. Refresh today’s records.");
         res.statusCode = response.status;
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("Content-Type", "application/json");
@@ -914,7 +1043,16 @@ export function createHandler({
           res.end();
           return;
         }
-        const result = await response.json();
+        let result = await response.json();
+        if (actor.role === "cashier") {
+          result = cashierSafe(result);
+          if (resource === "inventory")
+            result = Array.isArray(result)
+              ? result.map(({ price, ...item }) => item)
+              : Object.fromEntries(
+                  Object.entries(result).filter(([key]) => key !== "price"),
+                );
+        }
         if (resource === "staff" && response.ok) {
           const redact = (row) => {
             const safe = publicStaff(row);

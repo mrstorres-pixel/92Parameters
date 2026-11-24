@@ -1,0 +1,41 @@
+.payment-proof {
+  margin-top: 1.5rem;
+  font-size: 1rem;
+}
+.payment-proof p {
+  line-height: 1.5;
+}
+.proof-record {
+  padding: 1rem 0;
+  border-top: 1px solid var(--border-color, #665743);
+}
+.proof-record .btn,
+.proof-image .btn {
+  min-height: 48px;
+  margin: 0.5rem 0.5rem 0.5rem 0;
+}
+.proof-thumbnail {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #9a8059;
+  border-radius: 0.5rem;
+  background: #211c15;
+  color: #fff0d6;
+  font: inherit;
+  cursor: pointer;
+}
+.proof-thumbnail img {
+  max-height: 280px;
+  object-fit: contain;
+}
+.proof-image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.proof-thumbnail:focus-visible {
+  outline: 3px solid #efbc52;
+  outline-offset: 3px;
+}

@@ -1,6 +1,6 @@
 /* Version 2.1 - Forced Refresh */
 import React, { useState } from 'react';
-import { Banknote, Smartphone, CreditCard, Landmark, ShoppingBag } from 'lucide-react';
+import { Banknote, CreditCard, Landmark, ShoppingBag } from 'lucide-react';
 import Modal from '../common/Modal';
 import { formatCurrency } from '../../utils/formatters';
 import { calcChange } from '../../utils/calculations';
@@ -10,11 +10,9 @@ import PaymentProofCapture from './PaymentProofCapture';
 
 const methods = [
   { id: 'Cash', icon: Banknote, label: 'Cash' },
-  { id: 'GCash', icon: Smartphone, label: 'GCash' },
   { id: 'Card', icon: CreditCard, label: 'Card' },
   { id: 'Bank Transfer', icon: Landmark, label: 'Bank Transfer' },
   { id: 'Grab', icon: ShoppingBag, label: 'Grab' },
-  { id: 'Foodpanda', icon: ShoppingBag, label: 'Foodpanda' },
 ];
 
 export default function PaymentModal({ total: rawTotal, onConfirm, onClose, isProcessing = false,checkoutKey,sendFood=false }) {

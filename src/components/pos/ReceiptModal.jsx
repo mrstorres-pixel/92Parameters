@@ -3,6 +3,9 @@ import Modal from '../common/Modal';
 import { formatDateTime } from '../../utils/formatters';
 import { calcItemTotal } from '../../utils/calculations';
 import { formatPaymentLabel, normalizePaymentLines } from '../../utils/payments';
+import PaymentProofViewer from './PaymentProofViewer';
+import {useAuthStore} from '../../stores/authStore';
+import {secureBackend} from '../../utils/secureApi';
 
 function hasItemDiscount(item) {
   return Number(item.discount || 0) > 0 || Number(item.discountAmount || 0) > 0;
@@ -14,6 +17,7 @@ function formatReceiptCurrency(amount) {
 
 export default function ReceiptModal({ transaction, onClose }) {
   const ref = useRef();
+  const role=useAuthStore(state=>state.currentStaff?.role);
   const t = transaction;
   const paymentLines = normalizePaymentLines(t);
   const paidTotal = paymentLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
@@ -335,6 +339,7 @@ export default function ReceiptModal({ transaction, onClose }) {
           <div style={{ marginTop: '10px', fontWeight: 'bold' }}>THANK YOU! SEE US AGAIN! :)</div>
         </div>
       </div>
+      {secureBackend&&['owner','manager'].includes(role)&&t.id&&<PaymentProofViewer transactionId={t.id} isOwner={role==='owner'}/>}
     </Modal>
   );
 }

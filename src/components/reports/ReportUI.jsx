@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import { REPORT_MIGRATION_URL, money } from "../../utils/reporting";
 import { reportDateTime } from "../../utils/reportDates";
 import "../../styles/reports.css";
+import { useAuthStore } from "../../stores/authStore";
 
 export function ReportFrame({
   title,
@@ -12,14 +13,17 @@ export function ReportFrame({
   actions,
   period,
 }) {
+  const role = useAuthStore((state) => state.currentStaff?.role);
   return (
     <section className="reports-surface">
       <header className="report-heading">
         <h1 className="report-sr-only">{title}</h1>
         <nav className="report-links" aria-label="Report views">
-          <NavLink to="/reports" end>
-            Business
-          </NavLink>
+          {role === "owner" && (
+            <NavLink to="/reports" end>
+              Business
+            </NavLink>
+          )}
           <NavLink to="/transactions">Transactions</NavLink>
           <NavLink to="/cash">Cash</NavLink>
         </nav>

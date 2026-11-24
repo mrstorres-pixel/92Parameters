@@ -3,5 +3,6 @@ tests/
 scripts/*
 !scripts/prepareStaffPins.mjs
 !scripts/checkSecureSetup.mjs
+!scripts/checkDailyAccess.mjs
 docs/
 supabase/

@@ -1,4 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import useCashierDay from "../hooks/useCashierDay";
+import {
+  CashierCashTotals,
+  TodayPeriod,
+} from "../components/reports/CashierToday";
 import { useLocation } from "react-router-dom";
 import db, { supabase } from "../db/database";
 import Modal from "../components/common/Modal";
@@ -30,37 +35,41 @@ import {
 import { useReportPeriod } from "../stores/reportPeriodStore";
 import ReportRecordsDialog from "../components/reports/ReportRecordsDialog";
 
-function CashReportContent({ data, canReview, onReview }) {
+function CashReportContent({ data, canReview, onReview, isCashier = false }) {
   const m = reportMetrics(data);
   const [records, setRecords] = useState(null);
   const openRecords = (figure) => setRecords({ figure, source: data });
   return (
     <>
-      <div className="report-metrics">
-        <Metric
-          label="Cash sales portions"
-          onOpen={() => openRecords("cashSales")}
-          value={m.cashReady ? money(m.cashSalesCents) : "Needs review"}
-        />
-        <Metric
-          label="Manual cash in"
-          onOpen={() => openRecords("cashIn")}
-          value={m.cashReady ? money(m.cashInCents) : "Needs review"}
-        />
-        <Metric
-          label="Total cash out"
-          onOpen={() => openRecords("cashOut")}
-          value={m.cashReady ? money(m.cashOutCents) : "Needs review"}
-        />
-        <Metric
-          label="Recorded drawer movement"
-          onOpen={() => openRecords("drawerMovement")}
-          value={
-            m.cashReady ? money(m.drawerMovementCents) : "Pending cash review"
-          }
-          note="Cash sales + cash in − cash out"
-        />
-      </div>
+      {isCashier ? (
+        <CashierCashTotals data={data} onOpen={openRecords} />
+      ) : (
+        <div className="report-metrics">
+          <Metric
+            label="Cash sales portions"
+            onOpen={() => openRecords("cashSales")}
+            value={m.cashReady ? money(m.cashSalesCents) : "Needs review"}
+          />
+          <Metric
+            label="Manual cash in"
+            onOpen={() => openRecords("cashIn")}
+            value={m.cashReady ? money(m.cashInCents) : "Needs review"}
+          />
+          <Metric
+            label="Total cash out"
+            onOpen={() => openRecords("cashOut")}
+            value={m.cashReady ? money(m.cashOutCents) : "Needs review"}
+          />
+          <Metric
+            label="Recorded drawer movement"
+            onOpen={() => openRecords("drawerMovement")}
+            value={
+              m.cashReady ? money(m.drawerMovementCents) : "Pending cash review"
+            }
+            note="Cash sales + cash in − cash out"
+          />
+        </div>
+      )}
       <ReportExplanation title="How drawer movement is calculated">
         Cash sales + manual cash in − physical cash out. Totals cover the
         complete selected period; list filters do not change them.
@@ -70,45 +79,47 @@ function CashReportContent({ data, canReview, onReview }) {
           calculation.
         </p>
       </ReportExplanation>
-      <article className="report-panel">
-        <h2>Cash-out categories</h2>
-        <MoneyTable
-          onOpen={openRecords}
-          rows={[
-            [
-              "Operating expenses",
-              m.operatingCashOutCents,
-              false,
-              "operatingCashOut",
-            ],
-            ["Stock purchases", m.stockPurchaseCents, false, "stockPurchase"],
-            [
-              "Owner withdrawals",
-              m.ownerWithdrawalCents,
-              false,
-              "ownerWithdrawal",
-            ],
-            [
-              "Unclassified — needs review",
-              m.unclassifiedCents,
-              false,
-              "unclassified",
-            ],
-            [
-              "Total cash out",
-              m.cashReady ? m.cashOutCents : "Needs review",
-              true,
-              "cashOut",
-            ],
-          ]}
-        />
-        {m.unclassifiedCount > 0 && (
-          <p className="report-help">
-            {m.unclassifiedCount} cash-outs need category review before
-            operating profit can be displayed.
-          </p>
-        )}
-      </article>
+      {!isCashier && (
+        <article className="report-panel">
+          <h2>Cash-out categories</h2>
+          <MoneyTable
+            onOpen={openRecords}
+            rows={[
+              [
+                "Operating expenses",
+                m.operatingCashOutCents,
+                false,
+                "operatingCashOut",
+              ],
+              ["Stock purchases", m.stockPurchaseCents, false, "stockPurchase"],
+              [
+                "Owner withdrawals",
+                m.ownerWithdrawalCents,
+                false,
+                "ownerWithdrawal",
+              ],
+              [
+                "Unclassified — needs review",
+                m.unclassifiedCents,
+                false,
+                "unclassified",
+              ],
+              [
+                "Total cash out",
+                m.cashReady ? m.cashOutCents : "Needs review",
+                true,
+                "cashOut",
+              ],
+            ]}
+          />
+          {m.unclassifiedCount > 0 && (
+            <p className="report-help">
+              {m.unclassifiedCount} cash-outs need category review before
+              operating profit can be displayed.
+            </p>
+          )}
+        </article>
+      )}
       {records && (
         <ReportRecordsDialog {...records} onClose={() => setRecords(null)} />
       )}
@@ -236,18 +247,29 @@ export default function CashManagement() {
   const staff = useAuthStore((state) => state.currentStaff),
     canReview = staff?.role === "owner",
     toast = useToast();
+  const isCashier = staff?.role === "cashier";
+  const cashierDay = useCashierDay(isCashier);
+  useEffect(() => {
+    if (isCashier) {
+      setShowMonthly(false);
+      setReviewEntry(null);
+    }
+  }, [isCashier, cashierDay.bounds?.startMs]);
   let day, month, dateError, monthError;
   try {
-    day = reportRange({
-      range,
-      customStart,
-      customEnd,
-      lookbackAmount,
-      lookbackUnit,
-    });
+    day = isCashier
+      ? cashierDay.bounds
+      : reportRange({
+          range,
+          customStart,
+          customEnd,
+          lookbackAmount,
+          lookbackUnit,
+        });
   } catch (error) {
     dateError = error.message;
   }
+  if (isCashier) dateError = cashierDay.error;
   try {
     month = reportRange({ range: "calendar-month", monthValue: reportMonth });
   } catch (error) {
@@ -275,9 +297,12 @@ export default function CashManagement() {
         }
       : {},
     reload,
-    showMonthly && Boolean(month),
+    !isCashier && showMonthly && Boolean(month),
   );
-  const refresh = () => setReload((value) => value + 1);
+  const refresh = () => {
+    if (isCashier) cashierDay.refresh();
+    setReload((value) => value + 1);
+  };
   function chooseMonth(value) {
     setReportMonth(value);
     try {
@@ -291,6 +316,7 @@ export default function CashManagement() {
     }
   }
   function openMonthly() {
+    if (isCashier) return;
     chooseMonth(
       range !== "all" && day
         ? day.startDate.slice(0, 7)
@@ -377,22 +403,28 @@ export default function CashManagement() {
       generatedAt={daily.data?.generatedAt}
       onRefresh={refresh}
       period={
-        <ReportPeriod
-          {...{ range, customStart, customEnd, lookbackAmount, lookbackUnit }}
-          bounds={day}
-          onRange={setRange}
-          onStart={setStart}
-          onEnd={setEnd}
-          onAmount={setLookbackAmount}
-          onUnit={setUnit}
-          error={dateError}
-        />
+        isCashier ? (
+          <TodayPeriod bounds={day} />
+        ) : (
+          <ReportPeriod
+            {...{ range, customStart, customEnd, lookbackAmount, lookbackUnit }}
+            bounds={day}
+            onRange={setRange}
+            onStart={setStart}
+            onEnd={setEnd}
+            onAmount={setLookbackAmount}
+            onUnit={setUnit}
+            error={dateError}
+          />
+        )
       }
       actions={
         <>
-          <button className="btn btn-secondary" onClick={openMonthly}>
-            Monthly Reports
-          </button>
+          {!isCashier && (
+            <button className="btn btn-secondary" onClick={openMonthly}>
+              Monthly Reports
+            </button>
+          )}
           <button className="btn btn-success" onClick={() => openForm("in")}>
             Cash In
           </button>
@@ -432,14 +464,16 @@ export default function CashManagement() {
           <ReportState state={daily} />
           {daily.data && (
             <CashReportContent
+              key={day?.startMs}
               data={daily.data}
               canReview={canReview}
+              isCashier={isCashier}
               onReview={openReview}
             />
           )}
         </>
       )}
-      {showMonthly && (
+      {showMonthly && !isCashier && (
         <Modal
           title="Monthly Cash Movement Report"
           large
