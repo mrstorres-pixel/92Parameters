@@ -548,10 +548,52 @@ try {
   failReports = false;
   await page.getByRole("link", { name: "Cash", exact: true }).click();
   await page.getByRole("heading", { name: /Cash records/ }).waitFor();
+  await page.locator(".cash-drawer-metrics").waitFor();
   assert.equal(
     await page.locator(".report-period-label").innerText(),
     sharedPeriod,
   );
+  // Daily work comes first; support information opens only when requested.
+  assert.equal(await page.locator(".cash-drawer-heading").count(), 1);
+  assert.equal(await page.locator(".report-links").count(), 0);
+  assert.equal(
+    await page.locator(".cash-drawer-details").getAttribute("open"),
+    null,
+  );
+  assert.equal(
+    await page.getByLabel("Search cash records", { exact: true }).count(),
+    0,
+  );
+  await page
+    .getByRole("button", { name: "Search & filters", exact: true })
+    .click();
+  await page
+    .getByLabel("Search cash records", { exact: true })
+    .pressSequentially("Salary");
+  await page
+    .getByRole("heading", { name: "Cash records (1 matching)", exact: true })
+    .waitFor();
+  assert.equal(
+    await page.getByLabel("Search cash records", { exact: true }).inputValue(),
+    "Salary",
+  );
+  await page
+    .locator(".cash-drawer-metrics")
+    .getByText("₱350.00", { exact: true })
+    .waitFor();
+  await page
+    .getByRole("button", { name: "Search & filters (1)", exact: true })
+    .click();
+  assert.equal(
+    await page.getByLabel("Search cash records", { exact: true }).count(),
+    0,
+  );
+  await page
+    .getByRole("button", { name: "Clear filters", exact: true })
+    .click();
+  await page
+    .getByRole("heading", { name: "Cash records (4 matching)", exact: true })
+    .waitFor();
   await page
     .locator(".report-metrics")
     .getByRole("button", { name: "View Total cash out records", exact: true })
@@ -568,6 +610,9 @@ try {
   await sources
     .getByRole("button", { name: "Close records", exact: true })
     .click();
+  await page
+    .getByRole("button", { name: "Choose drawer period", exact: true })
+    .click();
   await page.getByRole("button", { name: "Custom", exact: true }).click();
   const periodEnd = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Manila",
@@ -577,6 +622,10 @@ try {
   }).format(new Date(now - 6 * 86400000));
   await page.getByLabel("From", { exact: true }).fill(periodStart);
   await page.getByLabel("To", { exact: true }).fill(periodEnd);
+  await page
+    .getByRole("dialog", { name: "Choose drawer period", exact: true })
+    .getByRole("button", { name: "Done", exact: true })
+    .click();
   await page.getByRole("link", { name: "Business", exact: true }).click();
   await metric("Sales").filter({ hasText: "12,205.00" }).waitFor();
   assert.equal(
@@ -709,8 +758,8 @@ try {
     .click();
   const monthly = page.locator(".reports-surface");
   await monthly.getByRole("heading", { name: /Cash records/ }).waitFor();
-  await monthly.locator(".report-record-extra summary").first().click();
   await monthly
+    .locator(".cash-category-column")
     .getByRole("button", { name: "Review category" })
     .filter({ visible: true })
     .click();
@@ -767,7 +816,10 @@ try {
   await sources
     .getByText("Milk / Waste Full Cream · Waste cost", { exact: true })
     .waitFor();
-  await sources.locator('.report-source-record > p').filter({hasText:'Salary November'}).waitFor();
+  await sources
+    .locator(".report-source-record > p")
+    .filter({ hasText: "Salary November" })
+    .waitFor();
   await sources
     .getByRole("button", { name: "Close records", exact: true })
     .click();
@@ -898,6 +950,7 @@ try {
     });
     await page.getByRole("link", { name: "Cash", exact: true }).tap();
     await page.getByRole("heading", { name: /Cash records/ }).waitFor();
+    await page.locator(".cash-drawer-metrics").waitFor();
     await assertTabletLayout();
     await page.screenshot({
       path: `.tmp/reports-tablet-cash-${orientation}.png`,
@@ -997,6 +1050,13 @@ try {
   let cashForm = page.getByRole("dialog", { name: "Cash Out", exact: true });
   await cashForm.getByLabel("Amount (PHP)").fill("25");
   await cashForm.getByLabel("Notes", { exact: true }).fill("Salary");
+  await page.setViewportSize({ width: 1180, height: 820 });
+  assert.equal(await cashForm.getByLabel("Amount (PHP)").inputValue(), "25");
+  assert.equal(
+    await cashForm.getByLabel("Notes", { exact: true }).inputValue(),
+    "Salary",
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(
     await cashForm.getByLabel("Cash-out category (optional)").inputValue(),
     "operating_expense",

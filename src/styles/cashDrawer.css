@@ -1,0 +1,361 @@
+/* Cash Drawer presentation only; reporting queries and role rules are shared. */
+.cash-drawer-heading,
+.cash-drawer-actions,
+.cash-records-heading,
+.cash-record-tools,
+.cash-drawer-footer,
+.cash-refresh,
+.cash-related-reports {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.cash-drawer-heading {
+  justify-content: space-between;
+  margin: 4px 0 24px;
+  gap: 16px;
+}
+.cash-drawer-heading h1 {
+  font-size: 1.5rem;
+  line-height: 1.3;
+  margin: 0;
+}
+.cash-drawer-actions {
+  justify-content: flex-end;
+}
+.cash-drawer-actions svg,
+.cash-refresh svg,
+.cash-record-tools svg {
+  flex-shrink: 0;
+}
+.cash-drawer-surface .cash-period-control .report-period-label {
+  margin: 0;
+  color: inherit;
+  font-size: 0.875rem;
+}
+.cash-drawer-surface .cash-drawer-metrics {
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.cash-drawer-metrics .report-metric {
+  padding: 20px;
+  border-radius: 12px;
+}
+.cash-drawer-metrics .report-metric h2 {
+  font-size: 0.875rem;
+  letter-spacing: 0.025em;
+  margin: 0 0 12px;
+}
+.cash-drawer-metrics .report-metric strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 1.875rem;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+.cash-drawer-surface .cash-drawer-metrics .report-figure-button {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+}
+.cash-drawer-metrics .report-figure-button::after {
+  content: "↗";
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+.cash-drawer-metrics .report-figure-hint {
+  display: none;
+}
+.cash-drawer-metrics .report-metric-positive strong {
+  color: var(--success);
+}
+.cash-drawer-metrics .report-metric-negative strong {
+  color: var(--danger);
+}
+.cash-records {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.cash-records-heading {
+  justify-content: space-between;
+  padding: 12px 20px;
+  gap: 8px;
+}
+.cash-records-heading h2 {
+  font-size: 1.125rem;
+  margin: 0;
+}
+.cash-records-heading h2 span {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+.cash-record-tools {
+  gap: 8px;
+}
+.cash-drawer-surface .cash-records .report-table-wrap {
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+}
+.cash-drawer-surface .cash-records-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.cash-drawer-surface .cash-records-table :is(th, td) {
+  padding: 16px;
+  height: 60px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+}
+.cash-drawer-surface .cash-records-table thead th {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.cash-records-table th:nth-child(1) {
+  width: 18%;
+}
+.cash-records-table th:nth-child(2) {
+  width: 11%;
+}
+.cash-records-table th:nth-child(3) {
+  width: 15%;
+}
+.cash-records-table th:nth-child(4) {
+  width: 16%;
+}
+.cash-records-table th:nth-child(5) {
+  width: 26%;
+}
+.cash-records-table th:nth-child(6) {
+  width: 14%;
+}
+.cash-drawer-surface .cash-records-table .cash-record-amount {
+  font-weight: 650;
+  white-space: nowrap;
+}
+.cash-drawer-surface .cash-records-table .report-money {
+  text-align: right;
+}
+.cash-record-date > span {
+  font-size: 0.875rem;
+}
+.cash-records-table .cash-record-notes {
+  white-space: pre-wrap;
+}
+.cash-drawer-surface .cash-records-table td:last-child {
+  text-align: left;
+}
+.cash-type {
+  display: inline-block;
+  font-size: 0.875rem;
+  font-weight: 650;
+  padding: 4px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.cash-type-in {
+  color: var(--success);
+  background: #203e30;
+}
+.cash-type-out {
+  color: var(--danger);
+  background: #582c2a;
+}
+.cash-drawer-surface .cash-category-action {
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: #efbd65;
+  min-height: 44px;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
+}
+.cash-drawer-surface .cash-record-details {
+  display: none;
+}
+.cash-record-details dl {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0;
+  font-size: 0.875rem;
+}
+.cash-record-details dt {
+  color: var(--text-secondary);
+}
+.cash-record-details dd {
+  margin: 0;
+}
+.cash-empty {
+  padding: 24px 20px;
+  color: var(--text-secondary);
+}
+.cash-record-filters {
+  padding: 0 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.cash-record-filters .report-field {
+  margin-top: 0;
+}
+.cash-drawer-surface .cash-review-notice {
+  display: block;
+  margin: 0;
+  padding: 8px 20px;
+  background: transparent;
+  border: 0;
+  color: var(--warning);
+  text-align: left;
+  font-size: 0.875rem;
+  min-height: 44px;
+}
+.cash-drawer-surface button.cash-review-notice {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.cash-drawer-surface .cash-drawer-details {
+  margin: 12px 0 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.cash-drawer-details > p {
+  max-width: 80ch;
+}
+.cash-drawer-details .report-table {
+  max-width: 720px;
+}
+.cash-drawer-footer {
+  justify-content: space-between;
+  gap: 8px 20px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.cash-refresh {
+  gap: 8px 16px;
+}
+.cash-related-reports {
+  gap: 20px;
+  font-size: 0.875rem;
+}
+@container reports (max-width: 980px) {
+  .cash-drawer-actions {
+    justify-content: flex-start;
+  }
+  .cash-drawer-surface .cash-staff-column {
+    display: none;
+  }
+  .cash-records-table th:nth-child(1) {
+    width: 23%;
+  }
+  .cash-records-table th:nth-child(2) {
+    width: 12%;
+  }
+  .cash-records-table th:nth-child(3) {
+    width: 18%;
+  }
+  .cash-records-table th:nth-child(4) {
+    width: 20%;
+  }
+  .cash-records-table th:nth-child(5) {
+    width: 27%;
+  }
+  .cash-drawer-surface .cash-record-details {
+    display: block;
+  }
+  .cash-drawer-surface .cash-records-table :is(th, td) {
+    padding: 12px;
+  }
+  .cash-records-table .cash-record-details summary {
+    font-size: 0.875rem;
+    min-height: 44px;
+  }
+}
+@container reports (max-width: 600px) {
+  .cash-drawer-heading {
+    align-items: stretch;
+    gap: 16px;
+  }
+  .cash-drawer-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+  }
+  .cash-drawer-surface .cash-drawer-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .cash-drawer-metrics .report-metric {
+    padding: 16px;
+  }
+  .cash-drawer-metrics .report-metric strong {
+    font-size: 1.5rem;
+    overflow-wrap: anywhere;
+  }
+  .cash-drawer-metrics .report-figure-button::after {
+    display: none;
+  }
+  .cash-records-heading {
+    padding: 12px 16px;
+  }
+  .cash-drawer-surface .cash-records-table,
+  .cash-records-table tbody {
+    display: block;
+  }
+  .cash-records-table thead {
+    display: none;
+  }
+  .cash-records-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cash-drawer-surface .cash-records-table tbody td {
+    display: block;
+    padding: 0;
+    height: auto;
+    border: 0;
+    min-width: 0;
+    text-align: left;
+  }
+  .cash-drawer-surface .cash-records-table .cash-record-amount {
+    text-align: right;
+  }
+  .cash-records-table .cash-record-date,
+  .cash-records-table .cash-record-notes {
+    grid-column: 1/-1;
+  }
+  .cash-records-table .cash-record-notes::before {
+    content: "Notes";
+    display: block;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+  .cash-drawer-surface .cash-records-table .cash-category-column,
+  .cash-drawer-surface .cash-records-table .cash-staff-column {
+    display: none;
+  }
+  .cash-record-filters {
+    padding: 0 16px 16px;
+  }
+}
+@container reports (max-width: 420px) {
+  .cash-drawer-surface .cash-drawer-metrics {
+    grid-template-columns: 1fr;
+  }
+}
