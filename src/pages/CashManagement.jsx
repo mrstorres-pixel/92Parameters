@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from "react";
 import useCashierDay from "../hooks/useCashierDay";
-import {
-  CashierCashTotals,
-  TodayPeriod,
-} from "../components/reports/CashierToday";
+import { TodayPeriod } from "../components/reports/CashierToday";
 import { useLocation } from "react-router-dom";
 import db, { supabase } from "../db/database";
 import Modal from "../components/common/Modal";
@@ -12,7 +9,6 @@ import { useToast } from "../components/common/Toast";
 import CashOutCategoryField from "../components/cash/CashOutCategoryField";
 import {
   getCashOutCategory,
-  cashOutCategoryLabel,
   suggestCashOutCategory,
   cashCategorySaveError,
 } from "../utils/cashOutCategories";
@@ -21,195 +17,22 @@ import {
   reportRange,
   reportDateTime,
 } from "../utils/reportDates";
-import { money, periodParams, reportMetrics } from "../utils/reporting";
+import { money, periodParams } from "../utils/reporting";
 import { downloadJson } from "../utils/durability";
 import useReport from "../hooks/useReport";
-import {
-  ReportFrame,
-  ReportState,
-  Metric,
-  MoneyTable,
-  ReportExplanation,
-  ReportPeriod,
-} from "../components/reports/ReportUI";
+import { ReportState, ReportPeriod } from "../components/reports/ReportUI";
 import { useReportPeriod } from "../stores/reportPeriodStore";
-import ReportRecordsDialog from "../components/reports/ReportRecordsDialog";
-
-function CashReportContent({ data, canReview, onReview, isCashier = false }) {
-  const m = reportMetrics(data);
-  const [records, setRecords] = useState(null);
-  const openRecords = (figure) => setRecords({ figure, source: data });
-  return (
-    <>
-      {isCashier ? (
-        <CashierCashTotals data={data} onOpen={openRecords} />
-      ) : (
-        <div className="report-metrics">
-          <Metric
-            label="Cash sales portions"
-            onOpen={() => openRecords("cashSales")}
-            value={m.cashReady ? money(m.cashSalesCents) : "Needs review"}
-          />
-          <Metric
-            label="Manual cash in"
-            onOpen={() => openRecords("cashIn")}
-            value={m.cashReady ? money(m.cashInCents) : "Needs review"}
-          />
-          <Metric
-            label="Total cash out"
-            onOpen={() => openRecords("cashOut")}
-            value={m.cashReady ? money(m.cashOutCents) : "Needs review"}
-          />
-          <Metric
-            label="Recorded drawer movement"
-            onOpen={() => openRecords("drawerMovement")}
-            value={
-              m.cashReady ? money(m.drawerMovementCents) : "Pending cash review"
-            }
-            note="Cash sales + cash in − cash out"
-          />
-        </div>
-      )}
-      <ReportExplanation title="How drawer movement is calculated">
-        Cash sales + manual cash in − physical cash out. Totals cover the
-        complete selected period; list filters do not change them.
-        <p>
-          Drawer movement is not profit or a counted balance. Every Cash Out is
-          physical drawer cash; non-cash sale portions do not enter this
-          calculation.
-        </p>
-      </ReportExplanation>
-      {!isCashier && (
-        <article className="report-panel">
-          <h2>Cash-out categories</h2>
-          <MoneyTable
-            onOpen={openRecords}
-            rows={[
-              [
-                "Operating expenses",
-                m.operatingCashOutCents,
-                false,
-                "operatingCashOut",
-              ],
-              ["Stock purchases", m.stockPurchaseCents, false, "stockPurchase"],
-              [
-                "Owner withdrawals",
-                m.ownerWithdrawalCents,
-                false,
-                "ownerWithdrawal",
-              ],
-              [
-                "Unclassified — needs review",
-                m.unclassifiedCents,
-                false,
-                "unclassified",
-              ],
-              [
-                "Total cash out",
-                m.cashReady ? m.cashOutCents : "Needs review",
-                true,
-                "cashOut",
-              ],
-            ]}
-          />
-          {m.unclassifiedCount > 0 && (
-            <p className="report-help">
-              {m.unclassifiedCount} cash-outs need category review before
-              operating profit can be displayed.
-            </p>
-          )}
-        </article>
-      )}
-      {records && (
-        <ReportRecordsDialog {...records} onClose={() => setRecords(null)} />
-      )}
-      <article className="report-panel">
-        <h2>Cash records ({data.matchingEntries.length} matching)</h2>
-        <div className="report-table-wrap">
-          <table className="report-table report-record-table">
-            <thead>
-              <tr>
-                <th>Date / time</th>
-                <th>Type</th>
-                <th>Category</th>
-                <th className="report-secondary-column">Notes</th>
-                <th className="report-secondary-column">Staff</th>
-                <th>Amount</th>
-                {canReview && (
-                  <th className="report-secondary-column">Action</th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {data.matchingEntries.map((entry) => (
-                <tr key={entry.id}>
-                  <td
-                    data-label="Date / time"
-                    className="report-record-identity"
-                  >
-                    {reportDateTime(entry.datetime)}
-                    <details className="report-record-extra">
-                      <summary>Details</summary>
-                      <dl>
-                        <dt>Notes</dt>
-                        <dd>{entry.notes || "No notes"}</dd>
-                        <dt>Staff</dt>
-                        <dd>{entry.staffName || "Unknown"}</dd>
-                      </dl>
-                      {canReview && entry.type === "out" && (
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => onReview(entry)}
-                        >
-                          Review category
-                        </button>
-                      )}
-                    </details>
-                  </td>
-                  <td data-label="Type">
-                    {entry.type === "in"
-                      ? "Cash in"
-                      : entry.type === "out"
-                        ? "Cash out"
-                        : "Needs review"}
-                  </td>
-                  <td data-label="Category">{cashOutCategoryLabel(entry)}</td>
-                  <td
-                    className="report-secondary-column"
-                    style={{ whiteSpace: "pre-wrap" }}
-                  >
-                    {entry.notes || "—"}
-                  </td>
-                  <td className="report-secondary-column">
-                    {entry.staffName || "Unknown"}
-                  </td>
-                  <td data-label="Amount" className="report-money">
-                    {money(entry.amountCents)}
-                  </td>
-                  {canReview && (
-                    <td className="report-secondary-column">
-                      {entry.type === "out" && (
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => onReview(entry)}
-                        >
-                          Review category
-                        </button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!data.matchingEntries.length && (
-          <p>No cash records match this selection.</p>
-        )}
-      </article>
-    </>
-  );
-}
+import CashDrawerContent from "../components/cash/CashDrawerContent";
+import {
+  ArrowDownCircle,
+  ArrowUpCircle,
+  CalendarDays,
+  BarChart3,
+  RefreshCw,
+  SlidersHorizontal,
+} from "lucide-react";
+import { NavLink } from "react-router-dom";
+import "../styles/cashDrawer.css";
 
 export default function CashManagement() {
   const location = useLocation();
@@ -228,6 +51,10 @@ export default function CashManagement() {
   } = useReportPeriod();
   const [reportMonth, setReportMonth] = useState(businessDate().slice(0, 7));
   const [showMonthly, setShowMonthly] = useState(false);
+  const [showPeriod, setShowPeriod] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(
+    new URLSearchParams(location.search).has("review"),
+  );
   const [search, setSearch] = useState(""),
     [reviewOnly, setReviewOnly] = useState(
       new URLSearchParams(location.search).has("review"),
@@ -324,6 +151,19 @@ export default function CashManagement() {
     );
     setShowMonthly(true);
   }
+  const formatPeriod = (value) =>
+    new Intl.DateTimeFormat("en-PH", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "Asia/Manila",
+    }).format(new Date(`${value}T00:00:00+08:00`));
+  const periodLabel = day
+    ? day.startDate === day.endDate
+      ? formatPeriod(day.startDate)
+      : `${formatPeriod(day.startDate)} — ${formatPeriod(day.endDate)} · inclusive`
+    : "Select a date";
+  const activeFilters = Number(Boolean(search.trim())) + Number(reviewOnly);
   function openForm(type) {
     setForm(type);
     setAmount("");
@@ -398,14 +238,151 @@ export default function CashManagement() {
     }
   }
   return (
-    <ReportFrame
-      title="Cash Drawer & Reports"
-      generatedAt={daily.data?.generatedAt}
-      onRefresh={refresh}
-      period={
-        isCashier ? (
-          <TodayPeriod bounds={day} />
-        ) : (
+    <section className="reports-surface cash-drawer-surface">
+      <header className="cash-drawer-heading">
+        <div>
+          <h1>Cash Drawer</h1>
+          {isCashier && <TodayPeriod bounds={day} />}
+        </div>
+        <div className="cash-drawer-actions">
+          {!isCashier && (
+            <>
+              <button
+                className="btn btn-secondary cash-period-control"
+                aria-label="Choose drawer period"
+                onClick={() => setShowPeriod(true)}
+              >
+                <CalendarDays size={20} />
+                <span className="report-period-label">{periodLabel}</span>
+              </button>
+              <button className="btn btn-secondary" onClick={openMonthly}>
+                <BarChart3 size={20} />
+                Monthly Reports
+              </button>
+            </>
+          )}
+          <button className="btn btn-success" onClick={() => openForm("in")}>
+            <ArrowDownCircle size={20} />
+            Cash In
+          </button>
+          <button className="btn btn-danger" onClick={() => openForm("out")}>
+            <ArrowUpCircle size={20} />
+            Cash Out
+          </button>
+        </div>
+      </header>
+      {dateError ? (
+        <p className="report-error" role="alert">
+          {dateError}
+        </p>
+      ) : (
+        <ReportState state={daily} />
+      )}
+      <CashDrawerContent
+        key={day?.startMs}
+        data={dateError ? null : daily.data}
+        canReview={canReview}
+        isCashier={isCashier}
+        onReview={openReview}
+        onNeedsReview={() => {
+          setReviewOnly(true);
+          setFiltersOpen(true);
+        }}
+        recordTools={
+          <div className="cash-record-tools">
+            <button
+              className="btn btn-ghost"
+              aria-expanded={filtersOpen}
+              aria-controls="cash-record-filters"
+              onClick={() => setFiltersOpen((value) => !value)}
+            >
+              <SlidersHorizontal size={18} />
+              Search &amp; filters
+              {activeFilters > 0 ? " (" + activeFilters + ")" : ""}
+            </button>
+            {activeFilters > 0 && (
+              <button
+                className="btn btn-ghost"
+                onClick={() => {
+                  setSearch("");
+                  setReviewOnly(false);
+                }}
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        }
+        filters={
+          filtersOpen && (
+            <div className="cash-record-filters" id="cash-record-filters">
+              <label className="report-field">
+                Search cash records
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Notes, staff, type or category"
+                />
+              </label>
+              <label className="report-check">
+                <input
+                  type="checkbox"
+                  checked={reviewOnly}
+                  onChange={(event) => setReviewOnly(event.target.checked)}
+                />
+                Only cash-outs needing category review
+              </label>
+              <p className="report-help">
+                Filters change the list. Cash totals still include the complete
+                selected period.
+              </p>
+            </div>
+          )
+        }
+      />
+      <footer className="cash-drawer-footer">
+        <div className="cash-refresh">
+          <button className="btn btn-ghost" onClick={refresh}>
+            <RefreshCw size={18} />
+            Refresh drawer
+          </button>
+          <p className="report-asof">
+            {daily.data
+              ? "As of " + reportDateTime(daily.data.generatedAt)
+              : "Waiting for complete drawer data"}
+          </p>
+        </div>
+        <nav aria-label="Related reports" className="cash-related-reports">
+          {staff?.role === "owner" && <NavLink to="/reports">Business</NavLink>}
+          <NavLink to="/transactions">Transactions</NavLink>
+        </nav>
+      </footer>
+      {showPeriod && !isCashier && (
+        <Modal
+          title="Choose drawer period"
+          onClose={() => setShowPeriod(false)}
+          footer={
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowPeriod(false)}
+            >
+              Done
+            </button>
+          }
+        >
+          <label className="report-field">
+            Drawer date
+            <input
+              type="date"
+              value={
+                day?.startDate === day?.endDate ? day?.startDate || "" : ""
+              }
+              onChange={(event) => {
+                if (event.target.value)
+                  setDates(event.target.value, event.target.value);
+              }}
+            />
+          </label>
           <ReportPeriod
             {...{ range, customStart, customEnd, lookbackAmount, lookbackUnit }}
             bounds={day}
@@ -416,62 +393,7 @@ export default function CashManagement() {
             onUnit={setUnit}
             error={dateError}
           />
-        )
-      }
-      actions={
-        <>
-          {!isCashier && (
-            <button className="btn btn-secondary" onClick={openMonthly}>
-              Monthly Reports
-            </button>
-          )}
-          <button className="btn btn-success" onClick={() => openForm("in")}>
-            Cash In
-          </button>
-          <button className="btn btn-danger" onClick={() => openForm("out")}>
-            Cash Out
-          </button>
-        </>
-      }
-    >
-      <div className="report-filters">
-        <label className="report-field">
-          Search cash records
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Notes, staff, type or category"
-          />
-        </label>
-        <details className="report-explanation" open={reviewOnly || undefined}>
-          <summary>More filters ({Number(reviewOnly)} active)</summary>
-          <label className="report-check">
-            <input
-              type="checkbox"
-              checked={reviewOnly}
-              onChange={(event) => setReviewOnly(event.target.checked)}
-            />
-            Only cash-outs needing category review
-          </label>
-        </details>
-      </div>
-      {dateError ? (
-        <p className="report-error" role="alert">
-          {dateError}
-        </p>
-      ) : (
-        <>
-          <ReportState state={daily} />
-          {daily.data && (
-            <CashReportContent
-              key={day?.startMs}
-              data={daily.data}
-              canReview={canReview}
-              isCashier={isCashier}
-              onReview={openReview}
-            />
-          )}
-        </>
+        </Modal>
       )}
       {showMonthly && !isCashier && (
         <Modal
@@ -549,7 +471,7 @@ export default function CashManagement() {
             <>
               <ReportState state={monthly} />
               {monthly.data && (
-                <CashReportContent
+                <CashDrawerContent
                   data={monthly.data}
                   canReview={canReview}
                   onReview={openReview}
@@ -695,6 +617,6 @@ export default function CashManagement() {
           )}
         </Modal>
       )}
-    </ReportFrame>
+    </section>
   );
 }
